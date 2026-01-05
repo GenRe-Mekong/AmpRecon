@@ -6,6 +6,7 @@
 
 include { PIPELINE_INIT       } from './workflows/utils'
 include { CRAM_TO_READS       } from './workflows/cram_to_reads'
+include { FASTQ_PREPROCESS    } from './workflows/fastq_preprocess'
 include { FASTQC              } from './modules/fastqc/main'
 include { ALIGNMENT           } from './workflows/alignment'
 include { GENOTYPING          } from './workflows/genotyping'
@@ -37,8 +38,11 @@ workflow AMPRECON {
         fastq_ch = CRAM_TO_READS.out.fastq
         ch_versions = ch_versions.mix(CRAM_TO_READS.out.versions)
     } else {
-        fastq_ch = PIPELINE_INIT.out.input_ch
+        FASTQ_PREPROCESS(PIPELINE_INIT.out.input_ch)
+        fastq_ch = FASTQ_PREPROCESS.out.fastq
+        ch_versions = ch_versions.mix(FASTQ_PREPROCESS.out.versions)
     }
+
     
     //
     // QUALITY CHECK
