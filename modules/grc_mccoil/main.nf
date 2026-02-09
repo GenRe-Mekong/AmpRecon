@@ -8,6 +8,7 @@ process GRC_MCCOIL_INPUT {
 
     input:
         path(barcodes_grc)
+        path(config)
 
     output:
         path("*.tsv"), emit: het
@@ -21,7 +22,7 @@ process GRC_MCCOIL_INPUT {
         """
         # write McCOIL in
         grc_process_mccoil_io.py -write_mccoil_in \
-                --barcodes_files ${barcodes_grc} --config ${grc_settings} \
+                --barcodes_files ${barcodes_grc} --config ${config} \
                 --output_file ${input_suffix}.tsv
         """
 }

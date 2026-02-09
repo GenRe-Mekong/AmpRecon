@@ -68,16 +68,29 @@ workflow VARIANTS_TO_GRCS {
 
     main:
 
+        def chrom_key_file = file("${chrom_key_file}")
+        def kelch_reference_file = file("${kelch_reference_file}")
+        def codon_key_file = file("${codon_key_file}")
+        def drl_information_file = file("${drl_information_file}")
+        def config = file("${params.grc_settings_file_path}")
         ch_versions = Channel.empty()
 
         // Write genotype file
-        assemble_genotype_file(lanelet_manifest_file, chrom_key_file)
+        assemble_genotype_file(
+            lanelet_manifest_file, 
+            chrom_key_file
+            )
         ch_versions = ch_versions.mix(assemble_genotype_file.out.versions.first())
         genotype_files_ch = assemble_genotype_file.out.mnf
         
         // Call mutations at Kelch13 loci
         if (params.no_kelch == false){
-            grc_kelch13_mutation_caller(genotype_files_ch, kelch_reference_file, codon_key_file)
+            grc_kelch13_mutation_caller(
+                genotype_files_ch,
+                kelch_reference_file,
+                codon_key_file,
+                config
+                )
             kelch_grc_ch = grc_kelch13_mutation_caller.out
         } else {
             kelch_grc_ch = Channel.empty()
@@ -85,23 +98,23 @@ workflow VARIANTS_TO_GRCS {
 
         // Call copy number variation at Plasmepsin breakpoint
         if (params.no_plasmepsin == false){
-            grc_plasmepsin_cnv_caller(genotype_files_ch)
+            grc_plasmepsin_cnv_caller(genotype_files_ch, config)
             plasmepsin_grc_ch = grc_plasmepsin_cnv_caller.out
         } else {
             plasmepsin_grc_ch = Channel.empty()
         }
 
         // Create barcodes
-        grc_barcoding(genotype_files_ch)
+        grc_barcoding(genotype_files_ch, config)
 
         // Determine species
-        grc_speciate(genotype_files_ch, grc_barcoding.out.barcoding_file)
+        grc_speciate(genotype_files_ch, grc_barcoding.out.barcoding_file, config)
 
         // Complexity of infection estimation
         if (params.no_coi == false) {
             // Load LibPaths 
             rlibs_path = Channel.fromPath("${projectDir}/assets/R_libs")
-            GRC_MCCOIL_INPUT(grc_barcoding.out.barcoding_file)
+            GRC_MCCOIL_INPUT(grc_barcoding.out.barcoding_file, config)
             GRC_RUN_MCCOIL(GRC_MCCOIL_INPUT.out.het, rlibs_path)
             GRC_PARSE_MCCOIL(GRC_RUN_MCCOIL.out.coi)
             coi_grc_ch = GRC_PARSE_MCCOIL.out.coi
@@ -111,7 +124,12 @@ workflow VARIANTS_TO_GRCS {
         }
 
         // Assemble drug resistance haplotypes and amino acid calls
-        grc_amino_acid_caller(genotype_files_ch, drl_information_file, codon_key_file)
+        grc_amino_acid_caller(
+            genotype_files_ch,
+            drl_information_file,
+            codon_key_file,
+            config
+            )
 
         // Assemble genetic report card file
         grc_speciate.out

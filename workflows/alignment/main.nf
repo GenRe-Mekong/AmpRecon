@@ -49,11 +49,21 @@ workflow ALIGNMENT {
         ch_versions = Channel.empty()
 		ch_multiqc_files = Channel.empty()
 
+
         //
         // MODULE: BWA
 		// alignment
         //
+        
+        // Staging reference files
+        def fastq_ch = fastq_ch.map {
+            def (meta, fastq) = it[0..1]
+            def fasta = file("${meta.reference.fasta}*")
+            return tuple(meta, fastq, fasta)
+        }
+
         BWA_MEM(fastq_ch)  
+
         ch_versions = ch_versions.mix(BWA_MEM.out.versions.first())
 
         //

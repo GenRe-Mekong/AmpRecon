@@ -15,6 +15,7 @@ process grc_plasmepsin_cnv_caller {
 
     input:
         path(genotype_file)
+        path(config)
 
     output:
         path("${plasmepsin_out_filename}")
@@ -27,6 +28,6 @@ process grc_plasmepsin_cnv_caller {
         grc_plasmepsin_cnv_caller.py \
             --genotype_files ${genotype_file} \
             --output_file "${plasmepsin_out_filename}" \
-            --config "${grc_settings}"
+            --config "${config}"
         """
 }

@@ -9,7 +9,7 @@ process SCRAMBLE_CRAM_TO_BAM {
     label 'process_low'
 
     input:
-        tuple val(meta), path(cram)
+        tuple val(meta), path(cram), path(fasta)
     output:
         tuple val(meta), path("*.bam"), emit: bam
         path "versions.yml"           , emit: versions

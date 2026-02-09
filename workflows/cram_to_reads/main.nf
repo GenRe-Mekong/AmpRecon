@@ -26,6 +26,12 @@ workflow CRAM_TO_READS {
  
         ch_versions = Channel.empty()
         
+        // Staging reference files
+        def input_ch = input_ch.map {
+            def (meta, fastq) = it[0..1]
+            def fasta = file("${meta.reference.fasta}*")
+            return tuple(meta, fastq, fasta)
+        }
         //
         // MODULE: SCRAMBLE
         // Covert CRAM to BAM
