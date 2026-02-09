@@ -8,7 +8,7 @@ process BWA_MEM {
     label "bwa"
 
     input:
-        tuple val(meta), path(reads)
+        tuple val(meta), path(reads), path(fasta)
 
     output:
         tuple val(meta), path("*.sam"), emit: sam

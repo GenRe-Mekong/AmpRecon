@@ -9,6 +9,7 @@ process grc_speciate {
     input:
         path(genotype_file)
         path(barcodes_file)
+        path(config)
 
     output:
         path("${speciation_out_filename}")
@@ -22,6 +23,6 @@ process grc_speciate {
             --genotype_files ${genotype_file} \
             --output_file "${speciation_out_filename}" \
             --barcodes_file "${barcodes_file}" \
-            --config "${grc_settings}"
+            --config "${config}"
         """
 }

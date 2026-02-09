@@ -19,7 +19,7 @@ process assemble_genotype_file {
 
     input:
         path(vcf_manifest_file)
-        val(chrom_key_file)
+        path(chrom_key_file)
 
     output:
         path("${output_file_name}"), emit: mnf
