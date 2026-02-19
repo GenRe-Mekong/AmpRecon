@@ -28,11 +28,10 @@ process GRC_MCCOIL_INPUT {
         
 process GRC_RUN_MCCOIL {
 
-    label "rbase"
+    label "mccoil"
 
     input:
         path(het_data)
-        path(R_libs)
 
     output:
         path("*_summary.txt"), emit: coi
@@ -41,7 +40,6 @@ process GRC_RUN_MCCOIL {
     script:
         def input_suffix = "myRun" // this could be the run id (or any sequence batch identifier)
         """
-        export R_LIBS="${R_libs}"
         runMcCOIL.R \
             -i ${het_data} \
             --outPrefix ${input_suffix} \

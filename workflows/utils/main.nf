@@ -1,8 +1,11 @@
+// Copyright (C) 2026 GenRe-Mekong Core Team.
+
 //
 // Subworkflow contains useful utility functions and workflows
 //
 
 include { VALIDATE_MANIFEST } from '../../modules/validate_manifest/main'
+include { VALIDATE_QPCR     } from '../../modules/validate_qpcr/main'
 
 /*
 -----------------------------------------------------------------------------------
@@ -12,10 +15,11 @@ include { VALIDATE_MANIFEST } from '../../modules/validate_manifest/main'
 
 workflow PIPELINE_INIT {
     take: 
-        help           // boolean: Display help and exit
+        help              // boolean: Display help and exit
         monochrome_logs   // boolean: Do not use coloured log outputs
-        outdir            //  string: The output directory where the results will be saved
-        input             //  string: Path to input samplesheet
+        outdir            // string: The output directory where the results will be saved
+        input             // string: Path to input samplesheet
+        optional_qpcr     // string: Path to optional qPCR file 
 
     main:
         // Show help message
@@ -86,8 +90,24 @@ workflow PIPELINE_INIT {
                         | set { input_ch }
         }
 
+        if (optional_qpcr) {
+            // qpcr is provided and phenotyper is enabled
+            qpcr_path_ch = Channel.fromPath(optional_qpcr, checkIfExists: true)
+            VALIDATE_QPCR(qpcr_path_ch)
+            qpcr_ch = VALIDATE_QPCR.out.validated_qpcr_mnf
+        } else if (!params.no_phenotyper && !optional_qpcr) {
+            // qpcr is not provided but phenotyper is enabled
+            VALIDATE_QPCR(input)
+            qpcr_ch = VALIDATE_QPCR.out.validated_qpcr_mnf
+        } else {
+            // qpcr is not provided and phenotyper is disabled
+            qpcr_ch = Channel.empty()
+        }
+
+
     emit: 
         input_ch
+        qpcr_ch
 }
 
 /*
@@ -112,12 +132,24 @@ def loggingInit(monochrome_logs) {
     */
     if (!params.monochrome_logs) {
         ANSI_GREEN = "\033[1;32m"
+        ANSI_YELLOW = "\033[1;33m"
         ANSI_RED   = "\033[1;31m"
         ANSI_RESET = "\033[0m"
     } else {
         ANSI_GREEN = ""
+        ANSI_YELLOW = ""
         ANSI_RED   = ""
         ANSI_RESET = ""
+    }
+
+    if (!params.no_phenotyper && !params.qpcr) {
+        warning_message = """
+        -*WARNING:---------------------------------------
+        No qPCR results were provided. 
+        Phenotyper will assume mdr1 and pm23 as missing data to predict drug resistance phenotypes.
+        """.stripIndent().stripTrailing()
+    } else {
+        warning_message = ""
     }
 
     log.info"""
@@ -147,6 +179,12 @@ def loggingInit(monochrome_logs) {
              --no_kelch                 : ${params.no_kelch}
              --no_coi                   : ${params.no_coi}
 
+             GRC extension:
+             --no_phenotyper            : ${params.no_phenotyper}
+             --phenotyper_rules         : ${params.phenotyper_rules}
+             --qpcr                     : ${params.qpcr}
+             ${ANSI_YELLOW}${warning_message}${ANSI_RESET}
+
              (DEBUG):
              --DEBUG_tile_limit         : ${params.DEBUG_tile_limit}
              --DEBUG_takes_n_bams       : ${params.DEBUG_takes_n_bams}
@@ -159,6 +197,8 @@ def loggingInit(monochrome_logs) {
              Base dir                   : ${ANSI_GREEN}${baseDir}${ANSI_RESET}
              ------------------------------------------
              """.stripIndent()
+
+             sleep(2000) // sleep for 2 seconds to allow the user to read the log before the pipeline starts
 }
 
 def printHelp() {

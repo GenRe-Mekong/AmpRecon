@@ -23,13 +23,14 @@ workflow AMPRECON {
     ch_versions = Channel.empty()
     ch_multiqc_files = Channel.empty()
     def manifest = resolvePath(params.manifest)
-
     PIPELINE_INIT (
         params.help, 
         params.monochrome_logs, 
         params.results_dir, 
-        manifest
+        manifest,
+        params.qpcr
     ) 
+
 
     if (params.execution_mode == "cram") {
         CRAM_TO_READS(
@@ -91,7 +92,8 @@ workflow AMPRECON {
         params.chrom_key_file_path,
         params.kelch_reference_file_path,
         params.codon_key_file_path,
-        params.drl_information_file_path
+        params.drl_information_file_path,
+        PIPELINE_INIT.out.qpcr_ch
     )
     ch_versions = ch_versions.mix(VARIANTS_TO_GRCS.out.versions)
 

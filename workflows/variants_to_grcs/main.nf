@@ -1,5 +1,6 @@
 #!/usr/bin/env nextflow
 // Copyright (C) 2023 Genome Surveillance Unit/Genome Research Ltd.
+// Copyright (C) 2026 GenRe-Mekong Core Team.
 
 
 /*
@@ -45,17 +46,19 @@
 */
 
 // import modules
-include { assemble_genotype_file       } from '../../modules/grc_assemble_genotype_file.nf'
-include { grc_kelch13_mutation_caller  } from '../../modules/grc_kelch13_mutation_caller.nf'
-include { grc_plasmepsin_cnv_caller    } from '../../modules/grc_plasmepsin_cnv_caller.nf'
-include { grc_speciate                 } from '../../modules/grc_speciate.nf'
-include { grc_barcoding                } from '../../modules/grc_barcoding.nf'
-include { GRC_MCCOIL_INPUT             } from '../../modules/grc_mccoil/main.nf'
-include { GRC_RUN_MCCOIL               } from '../../modules/grc_mccoil/main.nf'
-include { GRC_PARSE_MCCOIL             } from '../../modules/grc_mccoil/main.nf'
-include { grc_amino_acid_caller        } from '../../modules/grc_amino_acid_caller.nf'
-include { grc_assemble 			       } from '../../modules/grc_assemble.nf'
-include { GRC_ADD_METADATA             } from '../../modules/grc_add_metadata.nf'
+include { assemble_genotype_file        } from '../../modules/grc_assemble_genotype_file.nf'
+include { grc_kelch13_mutation_caller   } from '../../modules/grc_kelch13_mutation_caller.nf'
+include { grc_plasmepsin_cnv_caller     } from '../../modules/grc_plasmepsin_cnv_caller.nf'
+include { grc_speciate                  } from '../../modules/grc_speciate.nf'
+include { grc_barcoding                 } from '../../modules/grc_barcoding.nf'
+include { GRC_MCCOIL_INPUT              } from '../../modules/grc_mccoil/main.nf'
+include { GRC_RUN_MCCOIL                } from '../../modules/grc_mccoil/main.nf'
+include { GRC_PARSE_MCCOIL              } from '../../modules/grc_mccoil/main.nf'
+include { grc_amino_acid_caller         } from '../../modules/grc_amino_acid_caller.nf'
+include { grc_assemble as PRE_ASSEMBLE  } from '../../modules/grc_assemble.nf'
+include { grc_assemble as POST_ASSEMBLE } from '../../modules/grc_assemble.nf'
+include { PHENOTYPER                    } from '../../modules/grc_phenotyper/main.nf' 
+include { GRC_ADD_METADATA              } from '../../modules/grc_add_metadata.nf'
 
 workflow VARIANTS_TO_GRCS {
     take:
@@ -65,6 +68,7 @@ workflow VARIANTS_TO_GRCS {
         kelch_reference_file
         codon_key_file
         drl_information_file
+        qpcr_ch
 
     main:
 
@@ -99,10 +103,8 @@ workflow VARIANTS_TO_GRCS {
 
         // Complexity of infection estimation
         if (params.no_coi == false) {
-            // Load LibPaths 
-            rlibs_path = Channel.fromPath("${projectDir}/assets/R_libs")
             GRC_MCCOIL_INPUT(grc_barcoding.out.barcoding_file)
-            GRC_RUN_MCCOIL(GRC_MCCOIL_INPUT.out.het, rlibs_path)
+            GRC_RUN_MCCOIL(GRC_MCCOIL_INPUT.out.het)
             GRC_PARSE_MCCOIL(GRC_RUN_MCCOIL.out.coi)
             coi_grc_ch = GRC_PARSE_MCCOIL.out.coi
             ch_versions = ch_versions.mix(GRC_RUN_MCCOIL.out.versions.first())
@@ -122,12 +124,33 @@ workflow VARIANTS_TO_GRCS {
             .concat(grc_amino_acid_caller.out.drl_haplotypes)
             .concat(grc_amino_acid_caller.out.grc2)
             .concat(grc_barcoding.out.barcoding_split_out_file)
+            .concat(qpcr_ch)
             .collect()
             .set{grc_components}
-        grc_assemble(grc_components)
+
+        PRE_ASSEMBLE(grc_components)
+        
+        if (!params.no_phenotyper) {
+            // Predict drug/phenotype
+            PHENOTYPER(
+                PRE_ASSEMBLE.out,
+                params.phenotyper_rules
+            )
+            ch_versions = ch_versions.mix(PHENOTYPER.out.versions)
+
+            PRE_ASSEMBLE.out
+                .concat(PHENOTYPER.out.phenotype)
+                .collect()
+                .set{grc_post_process}
+            
+            POST_ASSEMBLE(grc_post_process)
+            assembled_grc = POST_ASSEMBLE.out
+        } else {
+            assembled_grc = PRE_ASSEMBLE.out
+        }
 
         // Add metadata from manifest to GRC file
-        GRC_ADD_METADATA(manifest_file, grc_assemble.out)
+        GRC_ADD_METADATA(manifest_file, assembled_grc)
 
         // Workflow output channel
         grc = GRC_ADD_METADATA.out
