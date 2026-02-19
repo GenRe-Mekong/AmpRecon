@@ -18,3 +18,5 @@ trace-*
 archives/*
 tests/test_data/*
 tests/*_result*/*
+tests/*/*/output/*
+nf-test
