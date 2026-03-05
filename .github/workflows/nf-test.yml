@@ -3,6 +3,7 @@ name: NF-Test CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 jobs:
   nf-test:
