@@ -82,7 +82,7 @@ jobs:
           apptainer --version
           singularity --version
           nextflow -version
-          nf-test --version
+          nf-test version
 
       # ── Run nf-test with CI and debug flags ─────────────────────────────────
       - name: Run nf-test
