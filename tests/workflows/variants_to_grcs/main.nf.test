@@ -4,7 +4,7 @@ nextflow_workflow {
     script "workflows/variants_to_grcs/main.nf"
     workflow "VARIANTS_TO_GRCS"
 
-    test("Test: Test GRC Creation, Should give the same result with no error.") {
+    test("Test: GRC Assemble Step - Full -- Should give the same result with no error.") {
         when {
             params {
                 batch_id         = "test"
@@ -12,6 +12,7 @@ nextflow_workflow {
             workflow {
                 def lanelet_path = "${workDir}/lanelet_vcf_manifest.csv"
                 def mnf_path     = "${workDir}/fq_mnf.tsv"
+                def qpcr_path    = "${workDir}/qpcr_mnf.tsv"
                 def fastq_path   = "${baseDir}/tests/data/fastq"
                 def vcf_path     = "${moduleTestDir}/data/vcfs"
                 def mnf          = WorkflowUtils.makeManifest("${mnf_path}", 
@@ -29,6 +30,31 @@ nextflow_workflow {
                         }
                     }
                 )
+
+				def qpcr = WorkflowUtils.makeManifest("${qpcr_path}", 
+					["ID", "mdr1-qpcr", "pm23-qpcr", "species-qpcr"],
+					[
+						[count: 4, mdr1: "WT",         pm23: "WT",         species: "pf"],
+						[count: 4, mdr1: "WT",         pm23: "Amplified",  species: "pf"],
+						[count: 4, mdr1: "WT",         pm23: "-",          species: "pf"],
+						[count: 4, mdr1: "Amplified",  pm23: "WT",         species: "pf"],
+						[count: 4, mdr1: "Amplified",  pm23: "Amplified",  species: "pf"],
+						[count: 4, mdr1: "Amplified",  pm23: "-",          species: "pf"],
+						[count: 2, mdr1: "-",          pm23: "-",          species: "pf"],
+					].withIndex().collectMany { testCase, idx ->
+						(1..testCase.count).collect { j ->
+							def sampleNum = idx * 4 + j  // offset by 4 (not count) to keep numbering sequential
+							def sampleName = String.format("sample%02d", sampleNum)
+							[
+								ID             : "${sampleName}",
+								"mdr1-qpcr"    : testCase.mdr1,
+								"pm23-qpcr"    : testCase.pm23,
+								"species-qpcr" : testCase.species,
+							]
+						}
+					}
+				)
+                
                 def lanelet      = WorkflowUtils.makeManifest("${lanelet_path}", 
                     ["ID", "vcf_path"],
                     (1..30).collectMany { i ->
@@ -52,6 +78,8 @@ nextflow_workflow {
                 input[4] = file("${moduleTestDir}/data/codonKey.txt")
                 // drl_information_file
                 input[5] = file("${moduleTestDir}/data/DRLinfo.txt")
+                // qpcr
+				input[6] = Channel.from(file("${qpcr}"))
 
                 """
             }
@@ -68,11 +96,346 @@ nextflow_workflow {
             // assert path(grc).md5 == "3b93063657e8d0a04a4f789eeb2469f5"
 
             // md5 of 148 essential columns from original pipeline
-			def subset_grc = WorkflowUtils.subsetColumns(grc, "${workDir}/subset_grc.tsv")            
-            assert path(subset_grc).md5 == "9a94336e10ab0ccce8c64b54037fc0ad"
+			def subset_grc = WorkflowUtils.subsetColumns(grc, "${workDir}/subset_grc.tsv", 2, 162)            
+			// subset grc wo qpcr
+            //assert path(subset_grc).md5 == "9a94336e10ab0ccce8c64b54037fc0ad"
+			// subset grc w qpcr and phenotyper
+            assert path(subset_grc).md5 == "ee3f2b011c4481bbd872a6163a3f1e36"
             
         }
 
     }
 
+    test("Test: GRC Assemble Step - missing qpcr columns -- Should Failed") {
+        when {
+            params {
+                batch_id         = "test"
+            }
+            workflow {
+                def lanelet_path = "${workDir}/lanelet_vcf_manifest.csv"
+                def mnf_path     = "${workDir}/fq_mnf.tsv"
+                def qpcr_path    = "${workDir}/qpcr_mnf.tsv"
+                def fastq_path   = "${baseDir}/tests/data/fastq"
+                def vcf_path     = "${moduleTestDir}/data/vcfs"
+                def mnf          = WorkflowUtils.makeManifest("${mnf_path}", 
+                    ["sample_id", "primer_panel", "fastq1_path", "fastq2_path", "meta"],
+                    (1..30).collectMany { i ->
+                        def sampleName = String.format("sample%02d", i)
+                        ["GRC1", "GRC2", "Spec"].collect { panel ->
+                            [
+                                sample_id   : "${sampleName}",
+                                primer_panel: "PFA_${panel}",
+                                fastq1_path : "${fastq_path}/${sampleName}.${panel.toLowerCase()}_1.fastq",
+                                fastq2_path : "${fastq_path}/${sampleName}.${panel.toLowerCase()}_2.fastq",
+                                meta        : "metadata of ${sampleName}"
+                            ]
+                        }
+                    }
+                )
+
+				def qpcr = WorkflowUtils.makeManifest("${qpcr_path}", 
+					["ID", "pm23-qpcr", "species-qpcr"],
+					[
+						[count: 4, pm23: "WT",         species: "pf"],
+						[count: 4, pm23: "Amplified",  species: "pf"],
+						[count: 4, pm23: "-",          species: "pf"],
+						[count: 4, pm23: "WT",         species: "pf"],
+						[count: 4, pm23: "Amplified",  species: "pf"],
+						[count: 4, pm23: "-",          species: "pf"],
+						[count: 2, pm23: "-",          species: "pf"],
+					].withIndex().collectMany { testCase, idx ->
+						(1..testCase.count).collect { j ->
+							def sampleNum = idx * 4 + j  // offset by 4 (not count) to keep numbering sequential
+							def sampleName = String.format("sample%02d", sampleNum)
+							[
+								ID             : "${sampleName}",
+								"mdr1-qpcr"    : testCase.mdr1,
+								"pm23-qpcr"    : testCase.pm23,
+								"species-qpcr" : testCase.species,
+							]
+						}
+					}
+				)
+                
+                def lanelet      = WorkflowUtils.makeManifest("${lanelet_path}", 
+                    ["ID", "vcf_path"],
+                    (1..30).collectMany { i ->
+                        def sampleName = String.format("sample%02d", i)
+                        ["GRC1", "GRC2", "Spec"].collect { panel ->
+                            [
+                                ID      : "${sampleName}",
+                                vcf_path: "${vcf_path}/${sampleName}.${panel.toLowerCase()}.vcf.gz"
+                            ]
+                        }
+                    }, ","
+                )
+                """
+                input[0] = file("${mnf}")
+                input[1] = file("${lanelet}")
+                // chrom_key_file
+                input[2] = file("${moduleTestDir}/data/chromKey.txt")
+                // kelch_reference_file
+                input[3] = file("${moduleTestDir}/data/kelchReference.txt")
+                // codon_key_file
+                input[4] = file("${moduleTestDir}/data/codonKey.txt")
+                // drl_information_file
+                input[5] = file("${moduleTestDir}/data/DRLinfo.txt")
+                // qpcr
+				input[6] = Channel.from(file("${qpcr}"))
+
+                """
+            }
+        }
+
+        then {
+            assert workflow.failed
+            
+        }
+
+    }
+
+	test("Test: GRC Assemble Step - legit qpcr mnf, phenotyper disabled -- Should give the same result with no error.") {
+			when {
+				params {
+					batch_id         = "test"
+					no_phenotyper    = true
+				}
+				workflow {
+					def lanelet_path = "${workDir}/lanelet_vcf_manifest.csv"
+					def mnf_path     = "${workDir}/fq_mnf.tsv"
+					def qpcr_path    = "${workDir}/qpcr_mnf.tsv"
+					def fastq_path   = "${baseDir}/tests/data/fastq"
+					def vcf_path     = "${moduleTestDir}/data/vcfs"
+					def mnf          = WorkflowUtils.makeManifest("${mnf_path}", 
+						["sample_id", "primer_panel", "fastq1_path", "fastq2_path", "meta"],
+						(1..30).collectMany { i ->
+							def sampleName = String.format("sample%02d", i)
+							["GRC1", "GRC2", "Spec"].collect { panel ->
+								[
+									sample_id   : "${sampleName}",
+									primer_panel: "PFA_${panel}",
+									fastq1_path : "${fastq_path}/${sampleName}.${panel.toLowerCase()}_1.fastq",
+									fastq2_path : "${fastq_path}/${sampleName}.${panel.toLowerCase()}_2.fastq",
+									meta        : "metadata of ${sampleName}"
+								]
+							}
+						}
+					)
+
+					def qpcr = WorkflowUtils.makeManifest("${qpcr_path}", 
+						["ID", "mdr1-qpcr", "pm23-qpcr", "species-qpcr"],
+						[
+							[count: 4, mdr1: "WT",         pm23: "WT",         species: "pf"],
+							[count: 4, mdr1: "WT",         pm23: "Amplified",  species: "pf"],
+							[count: 4, mdr1: "WT",         pm23: "-",          species: "pf"],
+							[count: 4, mdr1: "Amplified",  pm23: "WT",         species: "pf"],
+							[count: 4, mdr1: "Amplified",  pm23: "Amplified",  species: "pf"],
+							[count: 4, mdr1: "Amplified",  pm23: "-",          species: "pf"],
+							[count: 2, mdr1: "-",          pm23: "-",          species: "pf"],
+						].withIndex().collectMany { testCase, idx ->
+							(1..testCase.count).collect { j ->
+								def sampleNum = idx * 4 + j  // offset by 4 (not count) to keep numbering sequential
+								def sampleName = String.format("sample%02d", sampleNum)
+								[
+									ID             : "${sampleName}",
+									"mdr1-qpcr"    : testCase.mdr1,
+									"pm23-qpcr"    : testCase.pm23,
+									"species-qpcr" : testCase.species,
+								]
+							}
+						}
+					)
+					
+					def lanelet      = WorkflowUtils.makeManifest("${lanelet_path}", 
+						["ID", "vcf_path"],
+						(1..30).collectMany { i ->
+							def sampleName = String.format("sample%02d", i)
+							["GRC1", "GRC2", "Spec"].collect { panel ->
+								[
+									ID      : "${sampleName}",
+									vcf_path: "${vcf_path}/${sampleName}.${panel.toLowerCase()}.vcf.gz"
+								]
+							}
+						}, ","
+					)
+					"""
+					input[0] = file("${mnf}")
+					input[1] = file("${lanelet}")
+					// chrom_key_file
+					input[2] = file("${moduleTestDir}/data/chromKey.txt")
+					// kelch_reference_file
+					input[3] = file("${moduleTestDir}/data/kelchReference.txt")
+					// codon_key_file
+					input[4] = file("${moduleTestDir}/data/codonKey.txt")
+					// drl_information_file
+					input[5] = file("${moduleTestDir}/data/DRLinfo.txt")
+					// qpcr
+					input[6] = Channel.from(file("${qpcr}"))
+
+					"""
+				}
+			}
+
+			then {
+				assert workflow.success
+				assert workflow.out.grc
+				assert workflow.out.grc.size() == 1
+				// md5 of current worflow
+				def grc = workflow.out.grc.get(0)
+
+				// grc result contain abs path that vary on test env
+				// assert path(grc).md5 == "3b93063657e8d0a04a4f789eeb2469f5"
+
+				// md5 of 148 essential columns from original pipeline
+				def subset_grc = WorkflowUtils.subsetColumns(grc, "${workDir}/subset_grc.tsv", 2, 152)            
+				// subset grc wo qpcr
+				//assert path(subset_grc).md5 == "9a94336e10ab0ccce8c64b54037fc0ad"
+				// subset grc w qpcr but no phenotyper
+				assert path(subset_grc).md5 == "857feae5d34fd6310f317190122b16a7"
+				
+			}
+
+		}
+
+		test("Test: GRC Assemble Step - no qpcr, phenotyper disabled -- Should give the same result with no error.") {
+					when {
+						params {
+							batch_id         = "test"
+							no_phenotyper    = true
+						}
+						workflow {
+							def lanelet_path = "${workDir}/lanelet_vcf_manifest.csv"
+							def mnf_path     = "${workDir}/fq_mnf.tsv"
+							def qpcr_path    = "${workDir}/qpcr_mnf.tsv"
+							def fastq_path   = "${baseDir}/tests/data/fastq"
+							def vcf_path     = "${moduleTestDir}/data/vcfs"
+							def mnf          = WorkflowUtils.makeManifest("${mnf_path}", 
+								["sample_id", "primer_panel", "fastq1_path", "fastq2_path", "meta"],
+								(1..30).collectMany { i ->
+									def sampleName = String.format("sample%02d", i)
+									["GRC1", "GRC2", "Spec"].collect { panel ->
+										[
+											sample_id   : "${sampleName}",
+											primer_panel: "PFA_${panel}",
+											fastq1_path : "${fastq_path}/${sampleName}.${panel.toLowerCase()}_1.fastq",
+											fastq2_path : "${fastq_path}/${sampleName}.${panel.toLowerCase()}_2.fastq",
+											meta        : "metadata of ${sampleName}"
+										]
+									}
+								}
+							)
+
+							def lanelet      = WorkflowUtils.makeManifest("${lanelet_path}", 
+								["ID", "vcf_path"],
+								(1..30).collectMany { i ->
+									def sampleName = String.format("sample%02d", i)
+									["GRC1", "GRC2", "Spec"].collect { panel ->
+										[
+											ID      : "${sampleName}",
+											vcf_path: "${vcf_path}/${sampleName}.${panel.toLowerCase()}.vcf.gz"
+										]
+									}
+								}, ","
+							)
+							"""
+							input[0] = file("${mnf}")
+							input[1] = file("${lanelet}")
+							// chrom_key_file
+							input[2] = file("${moduleTestDir}/data/chromKey.txt")
+							// kelch_reference_file
+							input[3] = file("${moduleTestDir}/data/kelchReference.txt")
+							// codon_key_file
+							input[4] = file("${moduleTestDir}/data/codonKey.txt")
+							// drl_information_file
+							input[5] = file("${moduleTestDir}/data/DRLinfo.txt")
+							// qpcr
+							input[6] = Channel.empty()
+
+							"""
+						}
+					}
+
+					then {
+						assert workflow.success
+						assert workflow.out.grc
+						assert workflow.out.grc.size() == 1
+						// md5 of current worflow
+						def grc = workflow.out.grc.get(0)
+
+						// grc result contain abs path that vary on test env
+						// assert path(grc).md5 == "3b93063657e8d0a04a4f789eeb2469f5"
+
+						// md5 of 148 essential columns from original pipeline (no qpcr and phenotyper columns)
+						def subset_grc = WorkflowUtils.subsetColumns(grc, "${workDir}/subset_grc.tsv")
+						// subset old grc wo qpcr (note for renaming column from Kelch to kelch)
+						//assert path(subset_grc).md5 == "9a94336e10ab0ccce8c64b54037fc0ad"
+						// subset grc wo qpcr and no phenotyper
+						assert path(subset_grc).md5 == "231097e1d5ff5932ddcfd2572c8a73bd"
+						
+					}
+
+			}
+
+			test("Test: GRC Assemble Step - no qpcr, phenotyper enabled -- Should Fail.") {
+                    when {
+                        params {
+                            batch_id         = "test"
+                        }
+                        workflow {
+                            def lanelet_path = "${workDir}/lanelet_vcf_manifest.csv"
+                            def mnf_path     = "${workDir}/fq_mnf.tsv"
+                            def qpcr_path    = "${workDir}/qpcr_mnf.tsv"
+                            def fastq_path   = "${baseDir}/tests/data/fastq"
+                            def vcf_path     = "${moduleTestDir}/data/vcfs"
+                            def mnf          = WorkflowUtils.makeManifest("${mnf_path}", 
+                                ["sample_id", "primer_panel", "fastq1_path", "fastq2_path", "meta"],
+                                (1..30).collectMany { i ->
+                                    def sampleName = String.format("sample%02d", i)
+                                    ["GRC1", "GRC2", "Spec"].collect { panel ->
+                                        [
+                                            sample_id   : "${sampleName}",
+                                            primer_panel: "PFA_${panel}",
+                                            fastq1_path : "${fastq_path}/${sampleName}.${panel.toLowerCase()}_1.fastq",
+                                            fastq2_path : "${fastq_path}/${sampleName}.${panel.toLowerCase()}_2.fastq",
+                                            meta        : "metadata of ${sampleName}"
+                                        ]
+                                    }
+                                }
+                            )
+
+                            def lanelet      = WorkflowUtils.makeManifest("${lanelet_path}", 
+                                ["ID", "vcf_path"],
+                                (1..30).collectMany { i ->
+                                    def sampleName = String.format("sample%02d", i)
+                                    ["GRC1", "GRC2", "Spec"].collect { panel ->
+                                        [
+                                            ID      : "${sampleName}",
+                                            vcf_path: "${vcf_path}/${sampleName}.${panel.toLowerCase()}.vcf.gz"
+                                        ]
+                                    }
+                                }, ","
+                            )
+                            """
+                            input[0] = file("${mnf}")
+                            input[1] = file("${lanelet}")
+                            // chrom_key_file
+                            input[2] = file("${moduleTestDir}/data/chromKey.txt")
+                            // kelch_reference_file
+                            input[3] = file("${moduleTestDir}/data/kelchReference.txt")
+                            // codon_key_file
+                            input[4] = file("${moduleTestDir}/data/codonKey.txt")
+                            // drl_information_file
+                            input[5] = file("${moduleTestDir}/data/DRLinfo.txt")
+                            // qpcr
+                            input[6] = Channel.empty()
+
+                            """
+                        }
+                    }
+
+                    then {
+                        assert workflow.failed
+                    }
+
+                }
 }
