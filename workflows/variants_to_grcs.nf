@@ -58,6 +58,7 @@ include { grc_amino_acid_caller } from '../modules/grc_amino_acid_caller.nf'
 include { grc_assemble } from '../modules/grc_assemble.nf'
 include { grc_add_metadata } from '../modules/grc_add_metadata.nf'
 include { upload_pipeline_output_to_s3 } from '../modules/upload_pipeline_output_to_s3.nf'
+include { grc_curator } from '../modules/grc_curator.nf'
 
 workflow VARIANTS_TO_GRCS {
     take:
@@ -119,8 +120,10 @@ workflow VARIANTS_TO_GRCS {
             .set{grc_components}
         grc_assemble(grc_components)
 
+        grc_curator(grc_assemble.out)
+
         // Add metadata from manifest to GRC file
-        grc_add_metadata(manifest_file, grc_assemble.out)
+        grc_add_metadata(manifest_file, grc_curator.out.grc)
 
         // Workflow output channel
         grc = grc_add_metadata.out
