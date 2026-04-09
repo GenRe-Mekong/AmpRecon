@@ -44,6 +44,13 @@ for file in args["grcs_in"]:
     df = pd.read_csv(file, sep="\t", index_col=0)
     # Merge the DataFrame with the existing data
     merged_data = pd.concat([merged_data, df], axis=1, sort=False)
+    
+# Drop two extra columns from kelch13 mutation caller if they exist
+# Keep the original GRC format.
+for col in ["who_cov_perc", "missing_validated_muts"]:
+    if col in merged_data.columns:
+        merged_data.drop(columns=[col], inplace=True, errors="ignore")
+
 
 # fill NaN values with "-" and write final grc
 # -- handle special columns --

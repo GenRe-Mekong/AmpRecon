@@ -41,10 +41,10 @@ workflow PIPELINE_INIT {
 
             // validate sample sheet 
             VALIDATE_MANIFEST(
-				input,
-				params.panels_settings,
-				params.execution_mode
-			)
+                input,
+                params.panels_settings,
+                params.execution_mode
+            )
 
             // create irods channel 
             // tuple ( [uuid, id, panel, genome, snps], cram_path )
@@ -67,10 +67,10 @@ workflow PIPELINE_INIT {
 
             // validate sample sheet
             VALIDATE_MANIFEST(
-				input,
-				params.panels_settings,
-				params.execution_mode
-			)
+                input,
+                params.panels_settings,
+                params.execution_mode
+            )
 
             // create fastq channel
             // tuple ( [uuid, id, panel, genome, snps], [fastq1_path, fastq2_path] )
@@ -172,7 +172,6 @@ def loggingInit(monochrome_logs) {
              GRC:
              --grc_settings_file_path   : ${params.grc_settings_file_path}
              --chrom_key_file_path      : ${params.chrom_key_file_path}
-             --kelch_reference_file_path: ${params.kelch_reference_file_path}
              --codon_key_file_path      : ${params.codon_key_file_path}
              --drl_information_file_path: ${params.drl_information_file_path}
              --no_plasmepsin            : ${params.no_plasmepsin}
@@ -205,25 +204,24 @@ def printHelp() {
   log.info """
   AMPRECON ${workflow.manifest.version}
   Usage:
-    (cram):
-    nextflow run main.nf \\
-      -profile standard \\
-      -c conf/pfalciparum.config \\
-      --execution_mode cram \\
-      --batch_id 21045 \\
-      --manifest manifest.tsv \\
-      --containers_dir ./containers_dir/ \\
-      --results_dir output
+    # If using docker
+    nextflow run main.nf    \\
+        -profile docker     \\
+        --batch_id RUN00001 \\
+        --manifest samplesheet.tsv 
 
-    (fastq):
-    nextflow run main.nf \\
-      -profile standard \\
-      -c conf/pfalciparum.config \\
-      --execution_mode cram \\
-      --batch_id 21045 \\
-      --manifest manifest.tsv \\
-      --containers_dir ./containers_dir/ \\
-      --results_dir output
+    # If using singularity
+    nextflow run main.nf     \\
+        -profile singularity \\
+        --batch_id RUN00001  \\
+        --manifest samplesheet.tsv 
+    
+    # If using cram as input
+    nextflow run main.nf      \\
+        -profile docker       \\
+        --execution_mode cram \\
+        --batch_id RUN00001   \\
+        --manifest /path/to/samplesheet.tsv 
 
   Description:
     AmpRecon is a bioinformatics analysis pipeline for amplicon sequencing data.
@@ -240,18 +238,8 @@ def printHelp() {
                          This ID is only used to prefix output files and readgroup names in cram files.
                          It can be a run ID or any other identifier that makes sense for your data.
 
-      (grc_creation)
-      --grc_settings_file_path   : path to the GRC settings file.
-      --chrom_key_file_path      : path to the chrom key file
-      --kelch_reference_file_path: path to the kelch13 reference sequence file
-      --codon_key_file_path      : path to the codon key file
-      --drl_information_file_path: path to the drug resistance loci information file
-
     Settings:
       --results_dir     : output directory (default: output/)
-      --panels_settings : path to panel_settings.csv
-      --containers_dir  : path to a dir where the containers are located
-
 
     Additional options:
       --help    : prints this help message and exit
@@ -287,10 +275,6 @@ def validateInputParams() {
   error += __check_if_params_file_exist("codon_key_file_path", params.codon_key_file_path)
   error += __check_if_params_file_exist("drl_information_file_path", params.drl_information_file_path)
 
-  if (params.no_kelch == false) {
-    error += __check_if_params_file_exist("kelch_reference_file_path", params.kelch_reference_file_path)
-  }
-  
   // raise WARNING if debug params were set
   if (!params.DEBUG_takes_n_bams == null){
     log.warn("[DEBUG] takes_n_bams was set to ${params.DEBUG_takes_n_bams}")
@@ -450,13 +434,13 @@ def validateReferencePanels(panels_settings) {
     // gen reference channel
     def reference_ch = panels_settings_ch 
                        | map { row ->
-                         	// get absolute path for the pannel settings provided 
+                             // get absolute path for the pannel settings provided 
                             // on the repo. If not from the repo, load the path
                             // as set on the file
                             if (row.reference_file.startsWith("<ProjectDir>")){
                                 ref_path = addProjectDirAbsPathTo(row.reference_file)
                             } else {
-                            	ref_path = row.reference_file
+                                ref_path = row.reference_file
                             }
 
                             if (row.snp_list.startsWith("<ProjectDir>")){
@@ -492,7 +476,7 @@ def validateReferencePanels(panels_settings) {
 //
 
 def groupPanelReference(input) {
-	// Expect input of [primer_id, meta, input, fasta, snps, dsgn]
+    // Expect input of [primer_id, meta, input, fasta, snps, dsgn]
     def (meta, input_files, fasta, snps, dsgn) = input[1..5]
     reference_index_file_list = [".fai", ".amb", ".ann", ".bwt", ".pac", ".sa"]
     genome = [

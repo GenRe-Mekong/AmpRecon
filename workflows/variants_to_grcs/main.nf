@@ -47,7 +47,7 @@
 
 // import modules
 include { assemble_genotype_file        } from '../../modules/grc_assemble_genotype_file.nf'
-include { grc_kelch13_mutation_caller   } from '../../modules/grc_kelch13_mutation_caller.nf'
+include { GRC_KELCH13_MUTATION_CALLER   } from '../../modules/grccallers/main'
 include { grc_plasmepsin_cnv_caller     } from '../../modules/grc_plasmepsin_cnv_caller.nf'
 include { grc_speciate                  } from '../../modules/grc_speciate.nf'
 include { grc_barcoding                 } from '../../modules/grc_barcoding.nf'
@@ -65,7 +65,6 @@ workflow VARIANTS_TO_GRCS {
         manifest_file
         lanelet_manifest_file
         chrom_key_file
-        kelch_reference_file
         codon_key_file
         drl_information_file
         qpcr_ch
@@ -81,8 +80,8 @@ workflow VARIANTS_TO_GRCS {
         
         // Call mutations at Kelch13 loci
         if (params.no_kelch == false){
-            grc_kelch13_mutation_caller(genotype_files_ch, kelch_reference_file, codon_key_file)
-            kelch_grc_ch = grc_kelch13_mutation_caller.out
+            GRC_KELCH13_MUTATION_CALLER(genotype_files_ch)
+            kelch_grc_ch = GRC_KELCH13_MUTATION_CALLER.out.compact
         } else {
             kelch_grc_ch = Channel.empty()
         }
