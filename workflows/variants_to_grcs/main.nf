@@ -65,7 +65,6 @@ workflow VARIANTS_TO_GRCS {
         manifest_file
         lanelet_manifest_file
         chrom_key_file
-        kelch_reference_file
         codon_key_file
         drl_information_file
         qpcr_ch
