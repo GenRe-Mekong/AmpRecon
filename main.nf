@@ -1,7 +1,6 @@
 #!/usr/bin/env nextflow
 // Copyright (C) 2023 Genome Surveillance Unit/Genome Research Ltd.
 
-
 // --- import modules ---------------------------------------------------------
 
 include { PIPELINE_INIT       } from './workflows/utils'
@@ -19,18 +18,17 @@ include { write_vcfs_manifest } from './modules/write_vcfs_manifest.nf'
 // Main entry-point workflow
 workflow AMPRECON {
 
-// -- MAIN-EXECUTION ------------------------------------------------------
+    // -- MAIN-EXECUTION ------------------------------------------------------
     ch_versions = Channel.empty()
     ch_multiqc_files = Channel.empty()
     def manifest = resolvePath(params.manifest)
     PIPELINE_INIT (
-        params.help, 
-        params.monochrome_logs, 
-        params.results_dir, 
+        params.help,
+        params.monochrome_logs,
+        params.results_dir,
         manifest,
         params.qpcr
-    ) 
-
+    )
 
     if (params.execution_mode == "cram") {
         CRAM_TO_READS(
@@ -44,11 +42,10 @@ workflow AMPRECON {
         ch_versions = ch_versions.mix(FASTQ_PREPROCESS.out.versions)
     }
 
-    
     //
     // QUALITY CHECK
     //
-    FASTQC(fastq_ch) 
+    FASTQC(fastq_ch)
     ch_versions = ch_versions.mix(FASTQC.out.versions.first())
     ch_multiqc_files = ch_multiqc_files.mix(FASTQC.out.zip.collect{it[1]})
 
@@ -74,13 +71,13 @@ workflow AMPRECON {
     // GRC CREATION
     //
     GENOTYPING.out.vcf
-        | map { it -> 
+        | map { it ->
             def (meta, vcf, tbi) = it[0..2]
             tuple( meta.id ,vcf ) }
-        | multiMap { it -> 
+        | multiMap { it ->
             id:  it[0]
             vcf: it[1]
-            }
+        }
         | set { vcf_ch }
 
     write_vcfs_manifest(vcf_ch.id.collect(), vcf_ch.vcf.collect())
@@ -100,19 +97,18 @@ workflow AMPRECON {
         ch_multiqc_files.collect(),
         params.multiqc_config,
         [],
-        params.multiqc_logo,    
+        params.multiqc_logo,
         [],
         [],
         ch_versions.collect()
-    )    
+    )
     // TODO:
     PIPELINE_COMPLETION()
 
-    emit: 
+    emit:
     grc = VARIANTS_TO_GRCS.out.grc
 
 }
-
 
 // --- Execute Main Workflow -------------------------------------------------
 workflow {
@@ -130,17 +126,10 @@ workflow.onComplete {
             """
             .stripIndent()
     } else {
-        log.info """
+        log.info '''
             ===========================================
             Finished with errors!
-            """
+            '''
             .stripIndent()
     }
 }
-
-
-
-
-
-
-

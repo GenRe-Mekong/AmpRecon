@@ -5,40 +5,40 @@
 
 /*
     | VARIANTS_TO_GRCS |-----------------------------------------
-    
-    This workflow takes a manifest file and and manifest for 
-    samples and lanelet VCFs as input. The variant calls in these 
-    VCFs are used to determine several key metrics, from which 
+
+    This workflow takes a manifest file and and manifest for
+    samples and lanelet VCFs as input. The variant calls in these
+    VCFs are used to determine several key metrics, from which
     metadata enriched GRCs and barcodes files are assembled. Several
-    files are needed for these processes: 
-    [1] Chrom key file that specifies amplicon regions, their genomic 
-    coordinates and reference alleles is for genotype file creation. 
-    [2] Codon key file for describing the genetic code by linking 
+    files are needed for these processes:
+    [1] Chrom key file that specifies amplicon regions, their genomic
+    coordinates and reference alleles is for genotype file creation.
+    [2] Codon key file for describing the genetic code by linking
     codons with associated amino acid.
     [3] Kelch reference file which details the codons in the Kelch13
-    region - genomic location of each base, base at each position 
+    region - genomic location of each base, base at each position
     and amino acid.
     [4] DRL information file that describes the amino acid position,
-    mutation name, and genomic position for each base in the locus 
+    mutation name, and genomic position for each base in the locus
     for key drug resistance loci.
-    
-    A GRC settings file must also be supplied to the pipeline. This 
+
+    A GRC settings file must also be supplied to the pipeline. This
     file details different key settings for GRC creation. These include
     minimum coverage values for Kelch13 mutation calling and species
-    calling, Kelch13 regions, Plasmepsin loci genotypes and variants, 
+    calling, Kelch13 regions, Plasmepsin loci genotypes and variants,
     and amino acid calling / haplotype calling double heterozygous case
-    haplotype. It also contains values for a speciation default species 
-    and species order, species reference describing the allele for each 
+    haplotype. It also contains values for a speciation default species
+    and species order, species reference describing the allele for each
     species at particular loci and barcoding reference information:
     chromosome, locus, reference allele.
-    
+
     The lanelet VCFs specified in the lanelet manifest are used to
     create a genotype file. This genotype file is used throughout
     the workflow, for Kelch13 mutation calling, Plasmepsin copy
     number variation calling, drug resistance haplotype assembly,
-    barcode assembly, species calling and complexity of infection 
-    estimation. The output from these processes are assembled into 
-    2 GRC files, which then have metadata from the manifest added 
+    barcode assembly, species calling and complexity of infection
+    estimation. The output from these processes are assembled into
+    2 GRC files, which then have metadata from the manifest added
     to them.
 
     One GRC files and a barcodes file are the outputs.
@@ -57,8 +57,9 @@ include { GRC_PARSE_MCCOIL              } from '../../modules/grc_mccoil/main.nf
 include { grc_amino_acid_caller         } from '../../modules/grc_amino_acid_caller.nf'
 include { grc_assemble as PRE_ASSEMBLE  } from '../../modules/grc_assemble.nf'
 include { grc_assemble as POST_ASSEMBLE } from '../../modules/grc_assemble.nf'
-include { PHENOTYPER                    } from '../../modules/grc_phenotyper/main.nf' 
+include { PHENOTYPER                    } from '../../modules/grc_phenotyper/main.nf'
 include { GRC_ADD_METADATA              } from '../../modules/grc_add_metadata.nf'
+include { PRETTIFY_GRC                  } from '../../modules/prettifyGrc/main.nf'
 
 workflow VARIANTS_TO_GRCS {
     take:
@@ -77,7 +78,7 @@ workflow VARIANTS_TO_GRCS {
         assemble_genotype_file(lanelet_manifest_file, chrom_key_file)
         ch_versions = ch_versions.mix(assemble_genotype_file.out.versions.first())
         genotype_files_ch = assemble_genotype_file.out.mnf
-        
+
         // Call mutations at Kelch13 loci
         if (params.no_kelch == false){
             GRC_KELCH13_MUTATION_CALLER(genotype_files_ch)
@@ -128,7 +129,7 @@ workflow VARIANTS_TO_GRCS {
             .set{grc_components}
 
         PRE_ASSEMBLE(grc_components)
-        
+
         if (!params.no_phenotyper) {
             // Predict drug/phenotype
             PHENOTYPER(
@@ -141,7 +142,7 @@ workflow VARIANTS_TO_GRCS {
                 .concat(PHENOTYPER.out.phenotype)
                 .collect()
                 .set{grc_post_process}
-            
+
             POST_ASSEMBLE(grc_post_process)
             assembled_grc = POST_ASSEMBLE.out
         } else {
@@ -153,7 +154,10 @@ workflow VARIANTS_TO_GRCS {
 
         // Workflow output channel
         grc = GRC_ADD_METADATA.out
-    
+
+        // Prettify GRC file
+        PRETTIFY_GRC(grc)
+
     emit:
         grc
         versions = ch_versions
