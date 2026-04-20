@@ -130,7 +130,7 @@ workflow VARIANTS_TO_GRCS {
 
         PRE_ASSEMBLE(grc_components)
 
-        if (!params.no_phenotyper) {
+        if (params.phenotyper) {
             // Predict drug/phenotype
             PHENOTYPER(
                 PRE_ASSEMBLE.out,
