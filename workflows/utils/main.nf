@@ -142,7 +142,7 @@ def loggingInit(monochrome_logs) {
         ANSI_RESET = ""
     }
 
-    if (!params.no_phenotyper && !params.qpcr) {
+    if (params.phenotyper && !params.qpcr) {
         warning_message = """
         -*WARNING:---------------------------------------
         No qPCR results were provided. 
