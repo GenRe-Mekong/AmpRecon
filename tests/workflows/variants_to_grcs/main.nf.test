@@ -10,10 +10,11 @@ nextflow_workflow {
                 batch_id         = 'test'
             }
             workflow {
-
+                
                 def mnf          = WorkflowUtils.buildMnf(workDir, baseDir)
                 def lanelet      = WorkflowUtils.buildLanelet(workDir, moduleTestDir)
                 def qpcr         = WorkflowUtils.buildFullQpcr(workDir)
+                params.qpcr      = qpcr
 
                 """
                 input[0] = file("${mnf}")
@@ -54,6 +55,7 @@ nextflow_workflow {
                 def mnf          = WorkflowUtils.buildMnf(workDir, baseDir)
                 def lanelet      = WorkflowUtils.buildLanelet(workDir, moduleTestDir)
                 def qpcr         = WorkflowUtils.buildBadQpcr(workDir)
+                params.qpcr      = qpcr
 
                """
                 input[0] = file("${mnf}")
@@ -74,18 +76,18 @@ nextflow_workflow {
 
     }
 
-    test('Test: GRC Assemble Step - empty qpcr channel, no_phenotyper=true, assert with expected result.') {
+    test('Test: GRC Assemble Step - qpcr data with phenotyper disabled, assert with expected result.') {
             when {
                 params {
                     batch_id         = 'test'
-                    no_phenotyper    = true
+                    phenotyper       = false
                 }
                 workflow {
                     
                     def mnf          = WorkflowUtils.buildMnf(workDir, baseDir)
                     def lanelet      = WorkflowUtils.buildLanelet(workDir, moduleTestDir)
                     def qpcr         = WorkflowUtils.buildFullQpcr(workDir)
-
+                    params.qpcr      = qpcr
                     """
                     input[0] = file("${mnf}")
                     input[1] = file("${lanelet}")
@@ -114,11 +116,11 @@ nextflow_workflow {
 
         }
 
-    test('Test: GRC Assemble Step - no qpcr, phenotyper disabled -- Should give the same result with no error.') {
+    test('Test: GRC Assemble Step - default setting with no qpcr data and force disable phenotyper -- Should give the same result with no error.') {
         when {
             params {
                 batch_id         = 'test'
-                no_phenotyper    = true
+                phenotyper       = false
             }
             workflow {
                     
@@ -152,33 +154,6 @@ nextflow_workflow {
         }
     }
 
-    test('Test: GRC Assemble Step - no qpcr, phenotyper enabled -- Should Fail.') {
-
-        when {
-            params {
-                batch_id         = 'test'
-            }
-            workflow {
-                
-                def mnf          = WorkflowUtils.buildMnf(workDir, baseDir)
-                def lanelet      = WorkflowUtils.buildLanelet(workDir, moduleTestDir)
-
-                """
-                input[0] = file("${mnf}")
-                input[1] = file("${lanelet}")
-                input[2] = file("${moduleTestDir}/data/chromKey.txt")
-                input[3] = file("${moduleTestDir}/data/codonKey.txt")
-                input[4] = file("${moduleTestDir}/data/DRLinfo.txt")
-                input[5] = Channel.empty()
-
-                """
-            }
-        }
-        then {
-            assert workflow.failed
-        }
-    }
-
     // ===================================================================
     // Test: Kelch13 column present in assembled GRC (default config)
     //   Verifies the final GRC output contains an assembled
@@ -188,7 +163,7 @@ nextflow_workflow {
         when {
             params {
                 batch_id      = 'test'
-                no_phenotyper = true
+                phenotyper    = false
             }
             workflow {
                 
@@ -242,7 +217,7 @@ nextflow_workflow {
             params {
                 batch_id      = 'test'
                 no_kelch      = true
-                no_phenotyper = true
+                phenotyper    = false
             }
             workflow {
                 

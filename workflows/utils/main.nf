@@ -90,12 +90,12 @@ workflow PIPELINE_INIT {
                         | set { input_ch }
         }
 
-        if (optional_qpcr) {
+        if (params.qpcr) {
             // qpcr is provided and phenotyper is enabled
-            qpcr_path_ch = Channel.fromPath(optional_qpcr, checkIfExists: true)
+            qpcr_path_ch = Channel.fromPath(params.qpcr, checkIfExists: true)
             VALIDATE_QPCR(qpcr_path_ch)
             qpcr_ch = VALIDATE_QPCR.out.validated_qpcr_mnf
-        } else if (!params.no_phenotyper && !optional_qpcr) {
+        } else if (params.phenotyper && !params.qpcr) {
             // qpcr is not provided but phenotyper is enabled
             VALIDATE_QPCR(input)
             qpcr_ch = VALIDATE_QPCR.out.validated_qpcr_mnf
@@ -142,15 +142,8 @@ def loggingInit(monochrome_logs) {
         ANSI_RESET = ""
     }
 
-    if (params.phenotyper && !params.qpcr) {
-        warning_message = """
-        -*WARNING:---------------------------------------
-        No qPCR results were provided. 
-        Phenotyper will assume mdr1 and pm23 as missing data to predict drug resistance phenotypes.
-        """.stripIndent().stripTrailing()
-    } else {
-        warning_message = ""
-    }
+
+    phenotyper_status = params.phenotyper ? "enabled" : "disabled"
 
     log.info"""
             ===========================================
@@ -179,10 +172,9 @@ def loggingInit(monochrome_logs) {
              --no_coi                   : ${params.no_coi}
 
              GRC extension:
-             --no_phenotyper            : ${params.no_phenotyper}
-             --phenotyper_rules         : ${params.phenotyper_rules}
              --qpcr                     : ${params.qpcr}
-             ${ANSI_YELLOW}${warning_message}${ANSI_RESET}
+             --phenotyper               : ${phenotyper_status}
+             --phenotyper_rules         : ${params.phenotyper_rules}
 
              (DEBUG):
              --DEBUG_tile_limit         : ${params.DEBUG_tile_limit}
@@ -287,6 +279,10 @@ def validateInputParams() {
   if (params.no_coi){
     log.warn("no_coi is enable. This will skip COI step...")
   }
+
+  if (params.phenotyper && !params.qpcr) {
+    log.warn"""Force Phenotyper without qpcr data. Phenotyper will assume mdr1 and pm23 as missing data to predict drug resistance phenotypes.""".stripIndent().stripTrailing()
+  }
   // -------------------------------------------
 
   // check if output dir exists, if not create the default path
@@ -297,18 +293,6 @@ def validateInputParams() {
       results_path.mkdir()
     }
   }
-
-//   if ((params.no_coi == false) && (params.mccoil_repopath != "/app/THEREALMcCOIL/")){
-//     mccoil_path = file(params.mccoil_repopath)
-//     if (mccoil_path.exists() == false){
-//       log.error("""
-//       The mccoil_repopath provided (${mccoil_path}) does not exists.
-//       This can happen if you do not use the containers provided or setup an invalid custom path.
-//       Please provide a valid custom installation path of the McCOIL library.
-//       """)
-//       error+=1
-//     }
-//   }
 
   if (error > 0) {
     log.error("Parameter errors were found, the pipeline will not run")
