@@ -160,7 +160,7 @@ def check_id_overlap(grc_ids, meta_ids, mismatch):
 
 def merge(grc, meta, keep_grc_ids):
     merged = {}
-    for record_id in keep_grc_ids:
+    for record_id in sorted(keep_grc_ids):
         merged_row = dict(grc[record_id])
         merged_row.update(meta.get(record_id, {}))
         merged[record_id] = merged_row
