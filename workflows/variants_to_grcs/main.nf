@@ -58,7 +58,7 @@ include { grc_amino_acid_caller         } from '../../modules/grc_amino_acid_cal
 include { grc_assemble as PRE_ASSEMBLE  } from '../../modules/grc_assemble.nf'
 include { grc_assemble as POST_ASSEMBLE } from '../../modules/grc_assemble.nf'
 include { PHENOTYPER                    } from '../../modules/grc_phenotyper/main.nf'
-include { GRC_ADD_METADATA              } from '../../modules/grc_add_metadata.nf'
+include { GRC_ADD_METADATA              } from '../../modules/grc_add_metadata/main.nf'
 include { PRETTIFY_GRC                  } from '../../modules/prettifyGrc/main.nf'
 
 workflow VARIANTS_TO_GRCS {
@@ -149,8 +149,13 @@ workflow VARIANTS_TO_GRCS {
             assembled_grc = PRE_ASSEMBLE.out
         }
 
+        if (params.metadata) {
+            metadata = file(params.metadata)
+        } else {
+            metadata = manifest_file
+        }
         // Add metadata from manifest to GRC file
-        GRC_ADD_METADATA(manifest_file, assembled_grc)
+        GRC_ADD_METADATA(assembled_grc, metadata)
 
         // Workflow output channel
         grc = GRC_ADD_METADATA.out
