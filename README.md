@@ -202,7 +202,7 @@ The required structure of the manifest file depends on the selected execution mo
 By default, AmpRecon expects fastq files as input. The input manifest must be in tab-seperated format, follows a strict header:
 
 | sample_id | primer_panel | fastq1_path | fastq2_path |
-|-----------|--------------|---------|---------|
+|-----------|--------------|-------------|-------------|
 |sample01   |PFA_GRC1_v1.0 |/path/to/reads/sample01_grc1_R1.fastq.gz| /path/to/reads/sample01_grc1_R2.fastq.gz |
 |sample01   |PFA_GRC2_v1.0 |/path/to/reads/sample01_grc2_R1.fastq.gz| /path/to/reads/sample01_grc2_R2.fastq.gz |
 |sample01   |PFA_Spec      |/path/to/reads/sample01_spec_R1.fastq.gz| /path/to/reads/sample01_spec_R2.fastq.gz |
@@ -240,15 +240,17 @@ nextflow run main.nf \
 
 #### Metadata
 
-To include additional metadata in the pipeline results (e.g., Collection Site, Collection Date, etc.), you can add extra column(s) to the input manifest with headers of your choice. Ensure that the custom headers do not conflict with the required headers or [reserved result headers](https://www.malariagen.net/wp-content/uploads/2023/10/GRC_UserGuide_July2023.pdf).
+To include additional metadata in the pipeline results (e.g., Collection Site, Collection Date, etc.), you can supplies the metadata file with any extra column via the `--metadata` with the headers of your choice. Ensure that the custom headers do not conflict with the required headers or [reserved result headers](https://www.malariagen.net/wp-content/uploads/2023/10/GRC_UserGuide_July2023.pdf).
 
-**Note:** In the current version, the pipeline only reads metadata from the last row it finds in the manifest for any given sample. While you technically only need to fill the last row, it is often simpler and safer to fill in the metadata for all rows for that sample.
+The file is to be in the tab-delimited format with same sample identifier in the column `sample_id` as the input manifest file.
 
-| sample_id | primer_panel | fastq1_path | fastq2_path | collection_site | collection_date |
-|-----------|--------------|-------------|-------------|-----------------|-----------------|
-|sample01   |PFA_GRC1_v1.0 |/path/to/sample01_grc1_R1.fastq.gz| /path/to/sample01_grc1_R2.fastq.gz | Site_A | 2025-01-15 |
-|sample01   |PFA_GRC2_v1.0 |/path/to/sample01_grc2_R1.fastq.gz| /path/to/sample01_grc2_R2.fastq.gz | Site_A | 2025-01-15 |
-|sample01   |PFA_Spec      |/path/to/sample01_spec_R1.fastq.gz| /path/to/sample01_spec_R2.fastq.gz | Site_A | 2025-01-15 |
+**Example:**
+
+| sample_id | collection_site | collection_date |
+|-----------|-----------------|-----------------|
+|sample01   |    Site_A       | 2025-01-15      |
+|sample02   |    Site_A       | 2025-01-15      |
+|sample03   |    Site_B       | 2025-03-11      |
 
 [**(&uarr;)**](#amprecon---genre1)
 
