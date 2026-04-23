@@ -21,12 +21,12 @@ workflow AMPRECON {
     // -- MAIN-EXECUTION ------------------------------------------------------
     ch_versions = Channel.empty()
     ch_multiqc_files = Channel.empty()
-    def manifest = resolvePath(params.manifest)
+
     PIPELINE_INIT (
         params.help,
         params.monochrome_logs,
         params.results_dir,
-        manifest,
+        params.manifest,
         params.qpcr
     )
 
@@ -84,7 +84,7 @@ workflow AMPRECON {
     lanelet_manifest_file = write_vcfs_manifest.out
 
     VARIANTS_TO_GRCS(
-        manifest,
+        PIPELINE_INIT.out.manifest,
         lanelet_manifest_file,
         params.chrom_key_file_path,
         params.codon_key_file_path,

@@ -27,11 +27,13 @@ workflow PIPELINE_INIT {
            printHelp()
            exit 0
         }       
+
         // Print params before running
         loggingInit(monochrome_logs)
 
         // Validate All Input Params
         validateInputParams()
+        input = resolvePath(input)
 
         // Validate and create referecne channel
         // tuple ( panel_name, fasta, snps, dsgn_file )
@@ -74,9 +76,10 @@ workflow PIPELINE_INIT {
 
             // create fastq channel
             // tuple ( [uuid, id, panel, genome, snps], [fastq1_path, fastq2_path] )
-            fastq_ch = Channel.fromPath(input)
-                        | splitCsv(header: true, sep: '\t')
-                        | map { row -> 
+            fastq_ch = VALIDATE_MANIFEST.out.valid // run this only when VALIDATE_MANIFEST success
+                        | combine(Channel.fromPath(input))
+                            | splitCsv(header: true, sep: '\t')
+                        | map { _validsignal, row -> 
                             def meta = [
                                 uuid: row.sample_id + "_" + row.primer_panel,
                                 id: row.sample_id,
@@ -106,6 +109,7 @@ workflow PIPELINE_INIT {
 
 
     emit: 
+        manifest = input
         input_ch
         qpcr_ch
 }
@@ -176,9 +180,6 @@ def loggingInit(monochrome_logs) {
              --phenotyper               : ${phenotyper_status}
              --phenotyper_rules         : ${params.phenotyper_rules}
 
-             (DEBUG):
-             --DEBUG_tile_limit         : ${params.DEBUG_tile_limit}
-             --DEBUG_takes_n_bams       : ${params.DEBUG_takes_n_bams}
             -------------------------------------------
              Runtime data:
             -------------------------------------------
@@ -224,21 +225,33 @@ def printHelp() {
   Options:
     Inputs:
       (required)
-      --execution_mode : sets the entry point for the pipeline ("cram" or "fastq")
-      --manifest       : path to the manifest file
-      --batch_id       : id to be used for the batch of data to be processed. 
+      --manifest       : path to the manifest file. Template manifest files can be found 
+                         in the assets/test_mnf.tsv.
+      --batch_id       : User-defined identifier for this run batch. 
                          This ID is only used to prefix output files and readgroup names in cram files.
                          It can be a run ID or any other identifier that makes sense for your data.
 
     Settings:
-      --results_dir     : output directory (default: output/)
+      --results_dir    : output directory (default: <batch_id>_<current_timestamp>)
 
     Additional options:
-      --help    : prints this help message and exit
+      --metadata       : path to a optional tab-delimited metadata file provided with same identifier column as in the input manifest. 
+                         If provided, the metadata will be included in the final GRC results.
+      --qpcr           : path to optional qPCR file. If provided, the pipeline will run phenotyper to predict drug 
+                         resistance phenotypes based on the qPCR data. 
+                         Template qPCR manifest files can be found in the assets/test_mnf_qpcr.tsv.
+      --phenotyper     : force enable phenotyper to predict drug resistance phenotypes. 
+                         If no qPCR file is provided, phenotyper will be run assuming missing data for mdr1 and pm23.
+      --help           : prints this help message and exit
     
     Profiles:
-      standard (default): run locally using singularity
-      run_locally : run locally using what is available on the system environment (no containers)
+      standard (default): run using singularity containers (singularity must be installed on the system).
+      singularity       : same as standard profile.
+      docker            : run using docker containers (docker must be installed on the system)
+      test              : run a test version of the pipeline using the test manifest and reference files provided in the repository. 
+                          This profile is useful for testing the pipeline on a small dataset before running it on the full dataset.
+                          It is expected to be used with other profiles (e.g. `nextflow run main.nf -profile test,singularity`).
+      run_locally       : run without any container (all software must be installed on the system)
    """.stripIndent()
 }
 
@@ -260,21 +273,24 @@ def validateInputParams() {
     error += 1
   }
 
+  if (params.manifest == null) {
+    log.error"""--manifest must be provided.
+        Template manifest files can be found in the ${projectDir}/assets/test_mnf.tsv directory."""
+    error += 1
+  }
+
+  // check if batch_id is provided
+  if (params.batch_id == null) {
+    log.error("--batch_id must be provided.")
+    error += 1
+  }
+
   // check if resources were provided
   error += __check_if_params_file_exist("grc_settings_file_path", params.grc_settings_file_path)
   error += __check_if_params_file_exist("panels_settings", params.panels_settings) 
   error += __check_if_params_file_exist("chrom_key_file_path", params.chrom_key_file_path) 
   error += __check_if_params_file_exist("codon_key_file_path", params.codon_key_file_path)
   error += __check_if_params_file_exist("drl_information_file_path", params.drl_information_file_path)
-
-  // raise WARNING if debug params were set
-  if (!params.DEBUG_takes_n_bams == null){
-    log.warn("[DEBUG] takes_n_bams was set to ${params.DEBUG_takes_n_bams}")
-  }
-
-  if (!params.DEBUG_tile_limit == null){
-    log.warn("[DEBUG] tile_limit was set to ${params.DEBUG_tile_limit}")
-  }
 
   if (params.no_coi){
     log.warn("no_coi is enable. This will skip COI step...")
@@ -285,8 +301,14 @@ def validateInputParams() {
   }
   // -------------------------------------------
 
+  if (error > 0) {
+    log.error("Running nextflow run main.nf --help for more info")
+    exit 1
+  }
+
   // check if output dir exists, if not create the default path
   if (params.results_dir){
+    println("Checking if output directory exists...")
     results_path = file(params.results_dir)
     if (!results_path.exists()){
       log.warn("${results_path} does not exists, the dir will be created")
@@ -294,10 +316,6 @@ def validateInputParams() {
     }
   }
 
-  if (error > 0) {
-    log.error("Parameter errors were found, the pipeline will not run")
-    exit 1
-  }
 } 
 
 def __check_if_params_file_exist(param_name, param_value){
