@@ -16,6 +16,14 @@ workflow GENOTYPING {
 	ch_multiqc_files = Channel.empty()
 
     // MPILEUP
+    // Staging target and reference files
+    def bam_ch = bam_ch.map { it -> {
+        def( meta, bam, bai ) = it[0..2]
+        def target = file("${meta.snps}")
+        def fasta  = file("${meta.reference.fasta}")
+        return tuple(meta, bam, bai, target, fasta)
+        }
+    }
     BCFTOOLS_MPILEUP(bam_ch)
     ch_versions = ch_versions.mix(BCFTOOLS_MPILEUP.out.versions.first())
 

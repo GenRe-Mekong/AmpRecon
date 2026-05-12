@@ -72,6 +72,11 @@ workflow VARIANTS_TO_GRCS {
 
     main:
 
+        def chrom_key_file = file("${chrom_key_file}")
+        def kelch_reference_file = file("${kelch_reference_file}")
+        def codon_key_file = file("${codon_key_file}")
+        def drl_information_file = file("${drl_information_file}")
+        def config = file("${params.grc_settings_file_path}")
         ch_versions = Channel.empty()
 
         // Write genotype file
@@ -89,17 +94,17 @@ workflow VARIANTS_TO_GRCS {
 
         // Call copy number variation at Plasmepsin breakpoint
         if (params.no_plasmepsin == false){
-            grc_plasmepsin_cnv_caller(genotype_files_ch)
+            grc_plasmepsin_cnv_caller(genotype_files_ch, config)
             plasmepsin_grc_ch = grc_plasmepsin_cnv_caller.out
         } else {
             plasmepsin_grc_ch = Channel.empty()
         }
 
         // Create barcodes
-        grc_barcoding(genotype_files_ch)
+        grc_barcoding(genotype_files_ch, config)
 
         // Determine species
-        grc_speciate(genotype_files_ch, grc_barcoding.out.barcoding_file)
+        grc_speciate(genotype_files_ch, grc_barcoding.out.barcoding_file, config)
 
         // Complexity of infection estimation
         if (params.no_coi == false) {
@@ -113,7 +118,12 @@ workflow VARIANTS_TO_GRCS {
         }
 
         // Assemble drug resistance haplotypes and amino acid calls
-        grc_amino_acid_caller(genotype_files_ch, drl_information_file, codon_key_file)
+        grc_amino_acid_caller(
+            genotype_files_ch,
+            drl_information_file,
+            codon_key_file,
+            config
+            )
 
         // Assemble genetic report card file
         grc_speciate.out

@@ -10,6 +10,7 @@ process grc_amino_acid_caller {
         path(genotype_file)
         path(drl_information_file)
         path(codon_key_file)
+        path(config)
 
     output:
         path("${output_drl_haplotypes}"), emit: drl_haplotypes
@@ -23,7 +24,7 @@ process grc_amino_acid_caller {
         """
         grc_amino_acid_caller.py \
             --genotype_files ${genotype_file} \
-            --config "${grc_settings}"  \
+            --config "${config}"  \
             --output_grc1_file "${output_drl_haplotypes}" \
             --output_grc2_file "${output_grc_2}" \
             --drl_information_file "${drl_information_file}"  \
