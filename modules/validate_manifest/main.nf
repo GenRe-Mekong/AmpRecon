@@ -11,6 +11,7 @@ process VALIDATE_MANIFEST {
         val(execution_mode)
 
     output:
+        val true,             emit: valid
         path("versions.yml"), emit: versions
 
     script:

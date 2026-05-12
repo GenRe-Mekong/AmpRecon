@@ -69,7 +69,7 @@ class KelchMutationCaller:
         # Open output file and write header
         output_file = open(self.output_file_name, "w")
         file_writer = csv.DictWriter(
-            output_file, delimiter="\t", fieldnames=["ID", "Kelch"]
+            output_file, delimiter="\t", fieldnames=["ID", "kelch13"]
         )
         file_writer.writeheader()
 
@@ -97,7 +97,7 @@ class KelchMutationCaller:
 
                 # Write variant(s) and sample ID to output file
                 variant = " ".join(variant) if isinstance(variant, list) else variant
-                row = {"ID": str(ID), "Kelch": variant}
+                row = {"ID": str(ID), "kelch13": variant}
                 file_writer.writerow(row)
 
         output_file.close()

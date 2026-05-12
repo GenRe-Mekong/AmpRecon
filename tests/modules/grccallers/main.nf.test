@@ -1,0 +1,276 @@
+nextflow_process {
+
+    name "Test GRC_KELCH13_MUTATION_CALLER"
+    script "modules/grccallers/main.nf"
+    process "GRC_KELCH13_MUTATION_CALLER"
+
+    // -----------------------------------------------------------------------
+    //   Test: Known WHO mutation (C580Y homozygous)
+    //   Input genotype has sample_mut with C580Y and sample_ref with all ref.
+    //   Expect: process succeeds, compact output contains C580Y for sample_mut
+    // -----------------------------------------------------------------------
+    test("Test: Homozygous WHO mutation (C580Y) is called correctly") {
+        when {
+            process {
+                """
+                input[0] = file("${moduleTestDir}/data/genotype_with_mutation.tsv")
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            // Both compact and long outputs should be emitted
+            assert process.out.compact
+            assert process.out.long_format
+
+            // Read compact output
+            def compact = path(process.out.compact.get(0)).readLines()
+            def header  = compact[0].split("\t")
+
+            // sample_mut should have C580Y called
+            def mut_row = compact.find { it.startsWith("sample_mut") }
+            assert mut_row != null : "sample_mut should be present in output"
+            assert mut_row.contains("C580Y") : "sample_mut should have C580Y mutation called"
+            assert !mut_row.contains("C580Y*") : "C580Y should be homozygous (no asterisk)"
+
+            // sample_ref should be WT (all ref alleles with good depth)
+            def ref_row = compact.find { it.startsWith("sample_ref") }
+            assert ref_row != null : "sample_ref should be present in output"
+            def ref_fields = ref_row.split("\t")
+            assert ref_fields[1] == "WT" : "sample_ref should be called as WT, got: ${ref_fields[1]}"
+
+            // Long format should have correct column count
+            def long_out  = path(process.out.long_format.get(0)).readLines()
+            def long_header = long_out[0].split("\t")
+            assert long_header.size() == 17 : "Long format should have 17 columns, got: ${long_header.size()}"
+
+            // Long format should contain the C580Y mutation details
+            def long_mut = long_out.find { it.contains("C580Y") }
+            assert long_mut != null : "Long format should contain C580Y mutation"
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Test: Wild-type sample with full coverage
+    //   All reference alleles with high depth at all K13 positions.
+    //   Expect: compact output shows "WT"
+    // -----------------------------------------------------------------------
+    test("Test: Wild-type sample with full coverage is called as WT") {
+        when {
+            process {
+                """
+                input[0] = file("${moduleTestDir}/data/genotype_wt.tsv")
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.compact
+
+            def compact = path(process.out.compact.get(0)).readLines()
+            def wt_row  = compact.find { it.startsWith("sample_wt") }
+            assert wt_row != null : "sample_wt should be present in output"
+
+            def fields = wt_row.split("\t")
+            assert fields[1] == "WT" : "Sample with full coverage and no mutations should be WT, got: ${fields[1]}"
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Test: Low-coverage sample (missing call)
+    //   Sample has depth below min_dp at WHO-associated positions.
+    //   Expect: compact output shows "-", who_cov_perc < 1.0
+    // -----------------------------------------------------------------------
+    test("Test: Low-coverage sample is called as missing (-)") {
+        when {
+            process {
+                """
+                input[0] = file("${moduleTestDir}/data/genotype_low_coverage.tsv")
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.compact
+
+            def compact = path(process.out.compact.get(0)).readLines()
+            def header  = compact[0].split("\t")
+            def row     = compact.find { it.startsWith("sample_lowcov") }
+            assert row != null : "sample_lowcov should be present in output"
+
+            def fields = row.split("\t")
+            assert fields[1] == "-" : "Low-coverage sample should show '-' (missing), got: ${fields[1]}"
+
+            // who_cov_perc should be less than 1.0
+            def cov_idx = header.toList().indexOf("who_cov_perc")
+            if (cov_idx >= 0) {
+                def who_cov = fields[cov_idx] as double
+                assert who_cov < 1.0 : "WHO coverage should be < 1.0 for low-coverage sample, got: ${who_cov}"
+            }
+
+            // missing_validated_muts should list positions
+            def miss_idx = header.toList().indexOf("missing_validated_muts")
+            if (miss_idx >= 0) {
+                assert fields[miss_idx] != "-" : "missing_validated_muts should list uncovered positions"
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Test: Heterozygous variant call
+    //   Sample has het C580Y (both ref C and alt T alleles with good depth).
+    //   Expect: compact output shows het marker asterisk (e.g. "C580Y*")
+    // -----------------------------------------------------------------------
+    test("Test: Heterozygous variant is marked with asterisk") {
+        when {
+            process {
+                """
+                input[0] = file("${moduleTestDir}/data/genotype_het.tsv")
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.compact
+            assert process.out.long_format
+
+            def compact = path(process.out.compact.get(0)).readLines()
+            def row     = compact.find { it.startsWith("sample_het") }
+            assert row != null : "sample_het should be present in output"
+            assert row.contains("C580Y*") : "Heterozygous mutation should have asterisk, got: ${row}"
+
+            // Long format: is_het should be True for the C580Y entry
+            def long_out = path(process.out.long_format.get(0)).readLines()
+            def long_header = long_out[0].split("\t")
+            def het_idx = long_header.toList().indexOf("is_het")
+            def long_mut = long_out.find { it.contains("C580Y") }
+            assert long_mut != null : "Long format should contain C580Y entry"
+            if (het_idx >= 0) {
+                def is_het = long_mut.split("\t")[het_idx]
+                assert is_het == "True" : "is_het should be True for heterozygous call, got: ${is_het}"
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Test: QC threshold override via params
+    //   Same data as first test (C580Y with depth=100), but min_dp set to 200.
+    //   Expect: variant filtered out; sample_mut no longer shows C580Y.
+    // -----------------------------------------------------------------------
+    test("Test: QC threshold override filters variant via params") {
+        when {
+            params {
+                kelch13_min_dp = 200
+            }
+            process {
+                """
+                input[0] = file("${moduleTestDir}/data/genotype_with_mutation.tsv")
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.compact
+
+            def compact = path(process.out.compact.get(0)).readLines()
+            def mut_row = compact.find { it.startsWith("sample_mut") }
+            assert mut_row != null : "sample_mut should be present in output"
+
+            def fields = mut_row.split("\t")
+            // With min_dp=200 and depth=100, the position should fail QC
+            assert !mut_row.contains("C580Y") : "C580Y should be filtered out with min_dp=200, got: ${fields[1]}"
+            assert fields[1] == "-" : "sample_mut should show '-' when all positions fail QC (min_dp=200 > actual depth=100), got: ${fields[1]}"
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Test: Column renaming verification
+    //   Verify the sed post-processing renames columns correctly.
+    // -----------------------------------------------------------------------
+    test("Test: Output columns are renamed for downstream compatibility") {
+        when {
+            process {
+                """
+                input[0] = file("${moduleTestDir}/data/genotype_wt.tsv")
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def compact = path(process.out.compact.get(0)).readLines()
+            def header  = compact[0].split("\t")
+
+            // Verify the sed renaming worked:
+            //   sample_id -> ID
+            //   mutations -> kelch13
+            assert header[0] == "ID"       : "Column 'sample_id' should be renamed to 'ID', got: ${header[0]}"
+            assert header[1] == "kelch13"  : "Column 'mutations' should be renamed to 'kelch13', got: ${header[1]}"
+
+            // Verify the original names are NOT present
+            assert !compact[0].contains("sample_id") : "Header should not contain 'sample_id' after renaming"
+            assert !compact[0].contains("mutations")  : "Header should not contain 'mutations' after renaming"
+
+            // Verify additional columns are still present
+            assert compact[0].contains("who_cov_perc")           : "who_cov_perc column should be present"
+            assert compact[0].contains("missing_validated_muts") : "missing_validated_muts column should be present"
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Test: Multiple mutations - ordering and warning scenario
+    //   Sample has homozygous C580Y and heterozygous R539T.
+    //   Expect: compact format of output show hom and het in exact order with het end with asterisk(*)
+    // -----------------------------------------------------------------------
+    test("Test: Multiple mutations are ordered correctly (hom first, then het*)") {
+        when {
+            process {
+                """
+                input[0] = file("${moduleTestDir}/data/genotype_multi_mutation.tsv")
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.compact
+            assert process.out.long_format
+
+            def compact = path(process.out.compact.get(0)).readLines()
+            def row     = compact.find { it.startsWith("sample_multi") }
+            assert row != null : "sample_multi should be present in output"
+
+            def fields    = row.split("\t")
+            def mutations = fields[1]
+
+            // Should contain both mutations
+            assert mutations.contains("C580Y")  : "Should contain C580Y, got: ${mutations}"
+            assert mutations.contains("R539T")   : "Should contain R539T, got: ${mutations}"
+
+            // Homozygous C580Y should appear before heterozygous R539T*
+            assert mutations.contains("R539T*")  : "R539T should be marked as het (*), got: ${mutations}"
+            assert !mutations.contains("C580Y*") : "C580Y should be homozygous (no asterisk), got: ${mutations}"
+
+            // Order: homozygous calls first, then heterozygous
+            def idx_hom = mutations.indexOf("C580Y")
+            def idx_het = mutations.indexOf("R539T*")
+            assert idx_hom < idx_het : "Homozygous C580Y should come before heterozygous R539T*, got: ${mutations}"
+
+            // Long format should have entries for both mutations
+            def long_out  = path(process.out.long_format.get(0)).readLines()
+            def c580y_row = long_out.find { it.contains("C580Y") }
+            def r539t_row = long_out.find { it.contains("R539T") }
+            assert c580y_row != null : "Long format should contain C580Y entry"
+            assert r539t_row != null : "Long format should contain R539T entry"
+        }
+    }
+    // Test blank file
+
+}

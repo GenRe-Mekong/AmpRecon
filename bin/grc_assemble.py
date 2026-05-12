@@ -44,11 +44,25 @@ for file in args["grcs_in"]:
     df = pd.read_csv(file, sep="\t", index_col=0)
     # Merge the DataFrame with the existing data
     merged_data = pd.concat([merged_data, df], axis=1, sort=False)
+    
+# Drop two extra columns from kelch13 mutation caller if they exist
+# Keep the original GRC format.
+for col in ["who_cov_perc", "missing_validated_muts"]:
+    if col in merged_data.columns:
+        merged_data.drop(columns=[col], inplace=True, errors="ignore")
+
 
 # fill NaN values with "-" and write final grc
 # -- handle special columns --
 # intify McCOIL columns (PS: min value for COI is 1, in this context 0 is NaN)
+
 if "McCOIL" in merged_data.columns:
-    merged_data["McCOIL"] = merged_data["McCOIL"].fillna(0).astype(int).replace(0, "-")
+    merged_data["McCOIL"] = (
+        pd.to_numeric(merged_data["McCOIL"], errors="coerce")
+        .fillna(0)
+        .astype(int)
+        .replace(0, "-")
+    )
+
 # sort entries and fill nan values as "-"
 merged_data.fillna("-").sort_values(by=["ID"]).to_csv(args["grc_out_name"], sep="\t")

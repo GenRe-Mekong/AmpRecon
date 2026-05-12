@@ -17,8 +17,8 @@ process BAMADAPTERCLIP {
         path "versions.yml"                   , emit: versions
 
     script:
-        def verbose           = params.bamadapterclip_verbose ? params.bamadapterclip_verbose : 1
-        def compression_level = params.bamadapterclip_level ? params.bamadapterclip_level : 0
+        def verbose           = 1
+        def compression_level = 0
         def prefix            = "${meta.uuid}"
         """
         bamadapterclip \

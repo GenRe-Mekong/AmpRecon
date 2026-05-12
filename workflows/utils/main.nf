@@ -1,8 +1,11 @@
+// Copyright (C) 2026 GenRe-Mekong Core Team.
+
 //
 // Subworkflow contains useful utility functions and workflows
 //
 
 include { VALIDATE_MANIFEST } from '../../modules/validate_manifest/main'
+include { VALIDATE_QPCR     } from '../../modules/validate_qpcr/main'
 
 /*
 -----------------------------------------------------------------------------------
@@ -12,10 +15,11 @@ include { VALIDATE_MANIFEST } from '../../modules/validate_manifest/main'
 
 workflow PIPELINE_INIT {
     take: 
-        help           // boolean: Display help and exit
+        help              // boolean: Display help and exit
         monochrome_logs   // boolean: Do not use coloured log outputs
-        outdir            //  string: The output directory where the results will be saved
-        input             //  string: Path to input samplesheet
+        outdir            // string: The output directory where the results will be saved
+        input             // string: Path to input samplesheet
+        optional_qpcr     // string: Path to optional qPCR file 
 
     main:
         // Show help message
@@ -23,11 +27,13 @@ workflow PIPELINE_INIT {
            printHelp()
            exit 0
         }       
+
         // Print params before running
         loggingInit(monochrome_logs)
 
         // Validate All Input Params
         validateInputParams()
+        input = resolvePath(input)
 
         // Validate and create referecne channel
         // tuple ( panel_name, fasta, snps, dsgn_file )
@@ -37,10 +43,10 @@ workflow PIPELINE_INIT {
 
             // validate sample sheet 
             VALIDATE_MANIFEST(
-				input,
-				params.panels_settings,
-				params.execution_mode
-			)
+                input,
+                params.panels_settings,
+                params.execution_mode
+            )
 
             // create irods channel 
             // tuple ( [uuid, id, panel, genome, snps], cram_path )
@@ -63,16 +69,17 @@ workflow PIPELINE_INIT {
 
             // validate sample sheet
             VALIDATE_MANIFEST(
-				input,
-				params.panels_settings,
-				params.execution_mode
-			)
+                input,
+                params.panels_settings,
+                params.execution_mode
+            )
 
             // create fastq channel
             // tuple ( [uuid, id, panel, genome, snps], [fastq1_path, fastq2_path] )
-            fastq_ch = Channel.fromPath(input)
-                        | splitCsv(header: true, sep: '\t')
-                        | map { row -> 
+            fastq_ch = VALIDATE_MANIFEST.out.valid // run this only when VALIDATE_MANIFEST success
+                        | combine(Channel.fromPath(input))
+                            | splitCsv(header: true, sep: '\t')
+                        | map { _validsignal, row -> 
                             def meta = [
                                 uuid: row.sample_id + "_" + row.primer_panel,
                                 id: row.sample_id,
@@ -86,8 +93,25 @@ workflow PIPELINE_INIT {
                         | set { input_ch }
         }
 
+        if (params.qpcr) {
+            // qpcr is provided and phenotyper is enabled
+            qpcr_path_ch = Channel.fromPath(params.qpcr, checkIfExists: true)
+            VALIDATE_QPCR(qpcr_path_ch)
+            qpcr_ch = VALIDATE_QPCR.out.validated_qpcr_mnf
+        } else if (params.phenotyper && !params.qpcr) {
+            // qpcr is not provided but phenotyper is enabled
+            VALIDATE_QPCR(input)
+            qpcr_ch = VALIDATE_QPCR.out.validated_qpcr_mnf
+        } else {
+            // qpcr is not provided and phenotyper is disabled
+            qpcr_ch = Channel.empty()
+        }
+
+
     emit: 
+        manifest = input
         input_ch
+        qpcr_ch
 }
 
 /*
@@ -112,13 +136,18 @@ def loggingInit(monochrome_logs) {
     */
     if (!params.monochrome_logs) {
         ANSI_GREEN = "\033[1;32m"
+        ANSI_YELLOW = "\033[1;33m"
         ANSI_RED   = "\033[1;31m"
         ANSI_RESET = "\033[0m"
     } else {
         ANSI_GREEN = ""
+        ANSI_YELLOW = ""
         ANSI_RED   = ""
         ANSI_RESET = ""
     }
+
+
+    phenotyper_status = params.phenotyper ? "enabled" : "disabled"
 
     log.info"""
             ===========================================
@@ -140,16 +169,17 @@ def loggingInit(monochrome_logs) {
              GRC:
              --grc_settings_file_path   : ${params.grc_settings_file_path}
              --chrom_key_file_path      : ${params.chrom_key_file_path}
-             --kelch_reference_file_path: ${params.kelch_reference_file_path}
              --codon_key_file_path      : ${params.codon_key_file_path}
              --drl_information_file_path: ${params.drl_information_file_path}
              --no_plasmepsin            : ${params.no_plasmepsin}
              --no_kelch                 : ${params.no_kelch}
              --no_coi                   : ${params.no_coi}
 
-             (DEBUG):
-             --DEBUG_tile_limit         : ${params.DEBUG_tile_limit}
-             --DEBUG_takes_n_bams       : ${params.DEBUG_takes_n_bams}
+             GRC extension:
+             --qpcr                     : ${params.qpcr}
+             --phenotyper               : ${phenotyper_status}
+             --phenotyper_rules         : ${params.phenotyper_rules}
+
             -------------------------------------------
              Runtime data:
             -------------------------------------------
@@ -159,31 +189,32 @@ def loggingInit(monochrome_logs) {
              Base dir                   : ${ANSI_GREEN}${baseDir}${ANSI_RESET}
              ------------------------------------------
              """.stripIndent()
+
+             sleep(2000) // sleep for 2 seconds to allow the user to read the log before the pipeline starts
 }
 
 def printHelp() {
   log.info """
   AMPRECON ${workflow.manifest.version}
   Usage:
-    (cram):
-    nextflow run main.nf \\
-      -profile standard \\
-      -c conf/pfalciparum.config \\
-      --execution_mode cram \\
-      --batch_id 21045 \\
-      --manifest manifest.tsv \\
-      --containers_dir ./containers_dir/ \\
-      --results_dir output
+    # If using docker
+    nextflow run main.nf    \\
+        -profile docker     \\
+        --batch_id RUN00001 \\
+        --manifest samplesheet.tsv 
 
-    (fastq):
-    nextflow run main.nf \\
-      -profile standard \\
-      -c conf/pfalciparum.config \\
-      --execution_mode cram \\
-      --batch_id 21045 \\
-      --manifest manifest.tsv \\
-      --containers_dir ./containers_dir/ \\
-      --results_dir output
+    # If using singularity
+    nextflow run main.nf     \\
+        -profile singularity \\
+        --batch_id RUN00001  \\
+        --manifest samplesheet.tsv 
+    
+    # If using cram as input
+    nextflow run main.nf      \\
+        -profile docker       \\
+        --execution_mode cram \\
+        --batch_id RUN00001   \\
+        --manifest /path/to/samplesheet.tsv 
 
   Description:
     AmpRecon is a bioinformatics analysis pipeline for amplicon sequencing data.
@@ -194,31 +225,33 @@ def printHelp() {
   Options:
     Inputs:
       (required)
-      --execution_mode : sets the entry point for the pipeline ("cram" or "fastq")
-      --manifest       : path to the manifest file
-      --batch_id       : id to be used for the batch of data to be processed. 
+      --manifest       : path to the manifest file. Template manifest files can be found 
+                         in the assets/test_mnf.tsv.
+      --batch_id       : User-defined identifier for this run batch. 
                          This ID is only used to prefix output files and readgroup names in cram files.
                          It can be a run ID or any other identifier that makes sense for your data.
 
-      (grc_creation)
-      --grc_settings_file_path   : path to the GRC settings file.
-      --chrom_key_file_path      : path to the chrom key file
-      --kelch_reference_file_path: path to the kelch13 reference sequence file
-      --codon_key_file_path      : path to the codon key file
-      --drl_information_file_path: path to the drug resistance loci information file
-
     Settings:
-      --results_dir     : output directory (default: output/)
-      --panels_settings : path to panel_settings.csv
-      --containers_dir  : path to a dir where the containers are located
-
+      --results_dir    : output directory (default: <batch_id>_<current_timestamp>)
 
     Additional options:
-      --help    : prints this help message and exit
+      --metadata       : path to a optional tab-delimited metadata file provided with same identifier column as in the input manifest. 
+                         If provided, the metadata will be included in the final GRC results.
+      --qpcr           : path to optional qPCR file. If provided, the pipeline will run phenotyper to predict drug 
+                         resistance phenotypes based on the qPCR data. 
+                         Template qPCR manifest files can be found in the assets/test_mnf_qpcr.tsv.
+      --phenotyper     : force enable phenotyper to predict drug resistance phenotypes. 
+                         If no qPCR file is provided, phenotyper will be run assuming missing data for mdr1 and pm23.
+      --help           : prints this help message and exit
     
     Profiles:
-      standard (default): run locally using singularity
-      run_locally : run locally using what is available on the system environment (no containers)
+      standard (default): run using singularity containers (singularity must be installed on the system).
+      singularity       : same as standard profile.
+      docker            : run using docker containers (docker must be installed on the system)
+      test              : run a test version of the pipeline using the test manifest and reference files provided in the repository. 
+                          This profile is useful for testing the pipeline on a small dataset before running it on the full dataset.
+                          It is expected to be used with other profiles (e.g. `nextflow run main.nf -profile test,singularity`).
+      run_locally       : run without any container (all software must be installed on the system)
    """.stripIndent()
 }
 
@@ -240,6 +273,18 @@ def validateInputParams() {
     error += 1
   }
 
+  if (params.manifest == null) {
+    log.error"""--manifest must be provided.
+        Template manifest files can be found in the ${projectDir}/assets/test_mnf.tsv directory."""
+    error += 1
+  }
+
+  // check if batch_id is provided
+  if (params.batch_id == null) {
+    log.error("--batch_id must be provided.")
+    error += 1
+  }
+
   // check if resources were provided
   error += __check_if_params_file_exist("grc_settings_file_path", params.grc_settings_file_path)
   error += __check_if_params_file_exist("panels_settings", params.panels_settings) 
@@ -247,26 +292,23 @@ def validateInputParams() {
   error += __check_if_params_file_exist("codon_key_file_path", params.codon_key_file_path)
   error += __check_if_params_file_exist("drl_information_file_path", params.drl_information_file_path)
 
-  if (params.no_kelch == false) {
-    error += __check_if_params_file_exist("kelch_reference_file_path", params.kelch_reference_file_path)
-  }
-  
-  // raise WARNING if debug params were set
-  if (!params.DEBUG_takes_n_bams == null){
-    log.warn("[DEBUG] takes_n_bams was set to ${params.DEBUG_takes_n_bams}")
-  }
-
-  if (!params.DEBUG_tile_limit == null){
-    log.warn("[DEBUG] tile_limit was set to ${params.DEBUG_tile_limit}")
-  }
-
   if (params.no_coi){
     log.warn("no_coi is enable. This will skip COI step...")
   }
+
+  if (params.phenotyper && !params.qpcr) {
+    log.warn"""Force Phenotyper without qpcr data. Phenotyper will assume mdr1 and pm23 as missing data to predict drug resistance phenotypes.""".stripIndent().stripTrailing()
+  }
   // -------------------------------------------
+
+  if (error > 0) {
+    log.error("Running nextflow run main.nf --help for more info")
+    exit 1
+  }
 
   // check if output dir exists, if not create the default path
   if (params.results_dir){
+    println("Checking if output directory exists...")
     results_path = file(params.results_dir)
     if (!results_path.exists()){
       log.warn("${results_path} does not exists, the dir will be created")
@@ -274,22 +316,6 @@ def validateInputParams() {
     }
   }
 
-//   if ((params.no_coi == false) && (params.mccoil_repopath != "/app/THEREALMcCOIL/")){
-//     mccoil_path = file(params.mccoil_repopath)
-//     if (mccoil_path.exists() == false){
-//       log.error("""
-//       The mccoil_repopath provided (${mccoil_path}) does not exists.
-//       This can happen if you do not use the containers provided or setup an invalid custom path.
-//       Please provide a valid custom installation path of the McCOIL library.
-//       """)
-//       error+=1
-//     }
-//   }
-
-  if (error > 0) {
-    log.error("Parameter errors were found, the pipeline will not run")
-    exit 1
-  }
 } 
 
 def __check_if_params_file_exist(param_name, param_value){
@@ -410,13 +436,13 @@ def validateReferencePanels(panels_settings) {
     // gen reference channel
     def reference_ch = panels_settings_ch 
                        | map { row ->
-                         	// get absolute path for the pannel settings provided 
+                             // get absolute path for the pannel settings provided 
                             // on the repo. If not from the repo, load the path
                             // as set on the file
                             if (row.reference_file.startsWith("<ProjectDir>")){
                                 ref_path = addProjectDirAbsPathTo(row.reference_file)
                             } else {
-                            	ref_path = row.reference_file
+                                ref_path = row.reference_file
                             }
 
                             if (row.snp_list.startsWith("<ProjectDir>")){
@@ -452,7 +478,7 @@ def validateReferencePanels(panels_settings) {
 //
 
 def groupPanelReference(input) {
-	// Expect input of [primer_id, meta, input, fasta, snps, dsgn]
+    // Expect input of [primer_id, meta, input, fasta, snps, dsgn]
     def (meta, input_files, fasta, snps, dsgn) = input[1..5]
     reference_index_file_list = [".fai", ".amb", ".ann", ".bwt", ".pac", ".sa"]
     genome = [

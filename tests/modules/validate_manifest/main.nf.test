@@ -1,21 +1,19 @@
 nextflow_process {
 
-    name "Test manifest validation script"
+    name "Test VALIDATE_MANIFEST"
     script "modules/validate_manifest/main.nf"
     process "VALIDATE_MANIFEST"
 
-    test(
-        """
-        Test: Test CRAM mode, with valid format. Should run without failures.
-        Manifest:
-            | sample_id | primer_panel  |    cram_path      |
-            |-----------|---------------|-------------------|
-            | RCN0001   | PFA_GRC1      | RCN0001_GRC1.cram |
-            | RCN0001   | PFA_GRC2      | RCN0001_GRC2.cram |
-            | RCN0001   | PFA_Spec      | RCN0001_Spec.cram |
-        Result:
-        """ 
-    ) {
+    // -----------------------------------------------------------------------
+    //   Test: Valid cram manifest with cram mode
+    //   Manifest:
+    //      | sample_id | primer_panel  |    cram_path      |
+    //      |-----------|---------------|-------------------|
+    //      | RCN0001   | PFA_GRC1      | RCN0001_GRC1.cram |
+    //      | RCN0001   | PFA_GRC2      | RCN0001_GRC2.cram |
+    //   Expect: pass validation
+    // -----------------------------------------------------------------------
+    test("Test: Valid cram manifest for cram mode") {
         when {
 			params {
 				manifest = WorkflowUtils.makeManifest( "${workDir}/valid_cram_mnf.tsv",
@@ -44,18 +42,17 @@ nextflow_process {
 
     }
 
-    test(
-        """
-        Test: Test FastQ mode, with valid format. Should run without failures.
-        Input:
-            | sample_id | primer_panel  |    fastq1_path          |    fastq2_path          |
-            |-----------|---------------|-------------------------|-------------------------|
-            | RCN0001   | PFA_GRC1      | RCN0001_GRC1_1.fastq    | RCN0001_GRC1_2.fastq    |
-            | RCN0001   | PFA_GRC2      | RCN0001_GRC2_1.fq       | RCN0001_GRC2_2.fq       |
-            | RCN0001   | PFA_Spec      | RCN0001_Spec_1.fastq.gz | RCN0001_Spec_2.fastq.gz |
-        Result:
-        """
-    ) {
+    // -----------------------------------------------------------------------
+    //   Test: Valid fastq manifest with fastq mode
+    //   Manifest:
+    //      | sample_id | primer_panel  |    fastq1_path          |    fastq2_path          |
+    //      |-----------|---------------|-------------------------|-------------------------|
+    //      | RCN0001   | PFA_GRC1      | RCN0001_GRC1_1.fastq    | RCN0001_GRC1_2.fastq    |
+    //      | RCN0001   | PFA_GRC2      | RCN0001_GRC2_1.fq       | RCN0001_GRC2_2.fq       |
+    //      | RCN0001   | PFA_Spec      | RCN0001_Spec_1.fastq.gz | RCN0001_Spec_2.fastq.gz |
+    //   Expect: pass validation
+    // -----------------------------------------------------------------------
+    test("Test: Test FastQ mode, with valid format.") {
         when {
 			params {
 				manifest = WorkflowUtils.makeManifest( "${workDir}/valid_fq_mnf.tsv",
@@ -84,18 +81,17 @@ nextflow_process {
 
     }
 
-    test(
-        """
-        Test: Test FastQ mode, with invalid header in manifest. Should failed with an appropiate error.
-        Input:
-            | sample_id | primer_panel  |    fastq1_path          |    wrong_header         |
-            |-----------|---------------|-------------------------|-------------------------|
-            | RCN0001   | PFA_GRC1      | RCN0001_GRC1_1.fastq    | RCN0001_GRC1_2.fastq    |
-            | RCN0001   | PFA_GRC2      | RCN0001_GRC2_1.fq       | RCN0001_GRC2_2.fq       |
-            | RCN0001   | PFA_Spec      | RCN0001_Spec_1.fastq.gz | RCN0001_Spec_2.fastq.gz |
-        Result:
-        """
-    ) {
+    // -----------------------------------------------------------------------
+    //   Test: Invalid fastq manifest format with fastq mode
+    //   Manifest:
+    //      | sample_id | primer_panel  |    fastq1_path          |    wrong_header         |
+    //      |-----------|---------------|-------------------------|-------------------------|
+    //      | RCN0001   | PFA_GRC1      | RCN0001_GRC1_1.fastq    | RCN0001_GRC1_2.fastq    |
+    //      | RCN0001   | PFA_GRC2      | RCN0001_GRC2_1.fq       | RCN0001_GRC2_2.fq       |
+    //      | RCN0001   | PFA_Spec      | RCN0001_Spec_1.fastq.gz | RCN0001_Spec_2.fastq.gz |
+    //   Expect: Validation failed with appropiate error. 
+    // -----------------------------------------------------------------------
+    test("Test: Invalid fastq manifest format, should failed with an appropiate error") {
         when {
 			params {
 				manifest = WorkflowUtils.makeManifest( "${workDir}/valid_fq_mnf.tsv",
