@@ -39,7 +39,7 @@ By default, AmpRecon is configured to process data from _P. falciparum_. However
 
 ## Quick-Start Guide
 
-AmpRecon - GenRe.1 is built and tested with Nextflow [version 22.04](https://github.com/nextflow-io/nextflow/releases/tag/v22.04.4). It is recommended to use with either [Docker](https://docs.docker.com/engine/install/ubuntu/#installation-methods) or [Singularity](https://github.com/sylabs/singularity). Assuming you already have [Nextflow](https://github.com/nextflow-io/nextflow), and [Singularity](https://github.com/sylabs/singularity) or [Docker](https://docs.docker.com/engine/install/ubuntu/#installation-methods) installed, you can get started by following these steps:
+AmpRecon is built and tested with Nextflow [version 22.04](https://github.com/nextflow-io/nextflow/releases/tag/v22.04.4). It is recommended to use with either [Docker](https://docs.docker.com/engine/install/ubuntu/#installation-methods) or [Singularity](https://github.com/sylabs/singularity). Assuming you already have [Nextflow](https://github.com/nextflow-io/nextflow), and [Singularity](https://github.com/sylabs/singularity) or [Docker](https://docs.docker.com/engine/install/ubuntu/#installation-methods) installed, you can get started by following these steps:
 
 1. Clone the repository:
 
@@ -95,7 +95,7 @@ AmpRecon - GenRe.1 is built and tested with Nextflow [version 22.04](https://git
 
 Before you begin, ensure you have the following installed on a Linux-based operating system:
 
-- [Nextflow](https://www.nextflow.io/docs/latest/install.html#self-install) (≥22.10.21).
+- [Nextflow](https://www.nextflow.io/docs/latest/install.html#self-install) (≥22.10.21, <26.04).
 - A container engine — either [Docker](https://docs.docker.com/engine/install/ubuntu/#installation-methods) or [Singularity](https://docs.sylabs.io/guides/3.5/user-guide/quick_start.html#quick-installation-steps) is highly recommended, as it simplifies management of software dependencies.
 
 > [!NOTE]

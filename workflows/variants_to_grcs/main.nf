@@ -73,7 +73,6 @@ workflow VARIANTS_TO_GRCS {
     main:
 
         def chrom_key_file = file("${chrom_key_file}")
-        def kelch_reference_file = file("${kelch_reference_file}")
         def codon_key_file = file("${codon_key_file}")
         def drl_information_file = file("${drl_information_file}")
         def config = file("${params.grc_settings_file_path}")
@@ -108,7 +107,7 @@ workflow VARIANTS_TO_GRCS {
 
         // Complexity of infection estimation
         if (params.no_coi == false) {
-            GRC_MCCOIL_INPUT(grc_barcoding.out.barcoding_file)
+            GRC_MCCOIL_INPUT(grc_barcoding.out.barcoding_file, config)
             GRC_RUN_MCCOIL(GRC_MCCOIL_INPUT.out.het)
             GRC_PARSE_MCCOIL(GRC_RUN_MCCOIL.out.coi)
             coi_grc_ch = GRC_PARSE_MCCOIL.out.coi

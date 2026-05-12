@@ -53,6 +53,8 @@ jobs:
       # ── Install Nextflow (skip if cached) ─────────────────────────────────
       - name: Install Nextflow
         if: steps.cache-nextflow.outputs.cache-hit != 'true'
+        env:
+          NXF_VER: ${{ env.NEXTFLOW_VERSION }}
         run: |
           curl -s https://get.nextflow.io | bash
           sudo mv nextflow /usr/local/bin/
