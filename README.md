@@ -1,17 +1,17 @@
-# AmpRecon - GenRe.1
+# AmpRecon
 
-AmpRecon - GenRe.1 is a forked of the [genomic-surveillance/AmpRecon](https://github.com/genomic-surveillance/AmpRecon/tree/f73fd7c660fad9f0fc5594e0275ae7ba026ef5e8) pipeline, maintained by [Core GenRe-Mekong Team](https://github.com/GenRe-Mekong).
+This is a forked of the [genomic-surveillance/AmpRecon](https://github.com/genomic-surveillance/AmpRecon/tree/f73fd7c660fad9f0fc5594e0275ae7ba026ef5e8) pipeline, maintained by [Core GenRe-Mekong Team](https://github.com/GenRe-Mekong).
 
 AmpRecon is a bioinformatics analysis pipeline for analyzing amplicon sequencing data from the malaria parasite _Plasmodium falciparum_. The pipeline currently supports amplicon from three panels including GRC1, GRC2, and Spec. It takes paired-end short-reads `fastq` from each panel as input, align them to their respective reference panels, and performs varints calling to identify genetic variations.
 
-The primary output is a [Genetic Report Card (GRC)](https://www.malariagen.net/wp-content/uploads/2023/10/GRC_UserGuide_July2023.pdf) in CSV format, which summarizes key genetic information for each sample. This including the detection of drug resistance genes (i.e. kelch and plasmepsin), nucleotide and amino acid barcode, and an estimation of complexity of infection (COI).
+The primary output is a [Genetic Report Card (GRC)](https://www.malariagen.net/wp-content/uploads/2024/06/GRC_PfUserGuide_June2024.pdf) in CSV format, which summarizes key genetic information for each sample. This including the detection of drug resistance genes (i.e. kelch and plasmepsin), nucleotide and amino acid barcode, and an estimation of complexity of infection (COI).
 
 By default, AmpRecon is configured to process data from _P. falciparum_. However, it can also be used to analyze _Plasmodium vivax_ data by using the provided [configuration file](#p-vivax-configuration-file).
 
 ![workflow_outline](./assets/workflow_outline.png)
 <p style="text-align: center;"><i>An outline of the workflow.</i></p>
 
-- [AmpRecon - GenRe.1](#amprecon---genre1)
+- [AmpRecon](#amprecon)
   - [Quick-Start Guide](#quick-start-guide)
     - [TLDR](#tldr)
   - [Installation](#installation)
@@ -34,6 +34,7 @@ By default, AmpRecon is configured to process data from _P. falciparum_. However
       - [McCOIL setting](#mccoil-setting)
   - [_P. vivax_ Configuration File](#p-vivax-configuration-file)
   - [Output](#output)
+  - [FAQ](#faq)
   - [Authors and Acknowledgements](#authors-and-acknowledgements)
 
 ## Quick-Start Guide
@@ -246,13 +247,13 @@ The file is to be in the tab-delimited format with same sample identifier in the
 
 **Example:**
 
-| sample_id | collection_site | collection_date |
-|-----------|-----------------|-----------------|
-|sample01   |    Site_A       | 2025-01-15      |
-|sample02   |    Site_A       | 2025-01-15      |
-|sample03   |    Site_B       | 2025-03-11      |
+| sample_id | CollectionID | Country | SiteName | CollectionDate |
+|-----------|--------------|---------|----------|----------------|
+|sample01   |    A01       |   TH    |   SiteA  |   2025-01-15   |
+|sample02   |    A02       |    TH   |   SiteA  |   2025-01-15   |
+|sample03   |    A03       |   TH    |   SiteA  |   2025-03-11   |
 
-[**(&uarr;)**](#amprecon---genre1)
+[**(&uarr;)**](#amprecon)
 
 ## Running on Computing Cluster
 
@@ -309,7 +310,7 @@ nextflow run main.nf \
   --manifest /path/to/samplesheet.tsv
 ```  
 
-[**(&uarr;)**](#amprecon---genre1)  
+[**(&uarr;)**](#amprecon)  
 
 ## Pipeline Configuration
 
@@ -364,7 +365,7 @@ AmpRecon allows for workflow customization through various parameters. These par
 - `--mccoil_e2`: The probability of calling heterozygous loci homozygous. (Default: `0.05`)
 - `--mccoil_m0`: Initial COI. (Default: `5`)
 
-[**(&uarr;)**](#amprecon---genre1)
+[**(&uarr;)**](#amprecon)
 
 ## _P. vivax_ Configuration File  
 
@@ -380,7 +381,7 @@ nextflow run main.nf \
   --manifest pv_samplesheet.tsv
 ```
 
-[**(&uarr;)**](#amprecon---genre1)  
+[**(&uarr;)**](#amprecon)  
 
 ## Output
 
@@ -396,10 +397,14 @@ RUN00001_20250101_000101/
 │   ├── sample01_PFA_Spec.bam
 │   └── sample01_PFA_Spec.bam.bai
 ├── grc
-│   └── RUN00001_GRC.txt
+│   ├── logs/
+│   │   ├── k13_mut_call_compact.tsv
+│   │   └── k13_mut_call_long.tsv
+│   ├── RUN00001_GRC.txt
+│   └── RUN00001_GRC.xlsx
 ├── multiqc
-│   ├── RUN000001_multiqc_report.html
-│   └── RUN000001_multiqc_report_data/
+│   ├── RUN000001_multiqc_report_data/
+│   └── RUN000001_multiqc_report.html
 ├── pipeline_info
 │   ├── execution_report.html
 │   ├── execution_timeline.html
@@ -426,7 +431,7 @@ Contains filtered and indexed VCF files produced after genotyping.
 Each VCF represents the variant calls for a specific sample–panel pair.
 
 - `grc/`
-Contains the GRC summary file (e.g., RUN00001_GRC.txt), reporting aggregated per-panel results such as read counts and coverage statistics.
+Contains the GRC summary file (e.g., RUN00001_GRC.txt), reporting aggregated per-panel results such as read counts and coverage statistics. Additionally, it also contains the detail report on the kelch mutation step under the `logs/` directory.
 
 - `read_counts/`
 Contains per-panel read counts by region. Each CSV file (`*_reads_per_region.csv`) provides statistics such as total reads and mapping quality for each panel region.
@@ -437,7 +442,18 @@ Contains the consolidated MultiQC report (multiqc_report.html) summarizing quali
 - `pipeline_info/`
 Includes Nextflow’s execution metadata such as reports, timelines, and the pipeline DAG, useful for reproducibility and debugging.
 
-[**(&uarr;)**](#amprecon---genre1)  
+[**(&uarr;)**](#amprecon)  
+
+## FAQ 
+
+**Pipeline always failed at `GRC_RUN_MCCOIL` step:**
+
+This error typically occurs when the input data lacks sufficient heterozygous data for the **Complexity of Infection (COI)** analysis. The `GRC_RUN_MCCOIL` process requires a minimum threshold of heterozygous sites to calculate COI accurately. If your dataset is small (e.g., during testing), the remaining heterozygous sites may be removed during the filtering step, causing the analysis to fail and the pipeline to stop.
+
+If you are working with a limited dataset or COI is not required for your analysis, use the `--no_coi` flag to bypass this step.
+
+
+[**(&uarr;)**](#amprecon)  
 
 ## Authors and Acknowledgements
 
@@ -445,4 +461,4 @@ This pipeline was originally developed and maintained by the [Data Analysis and 
 
 Following the closure of GSU, the project has been transferred to and is now maintained and further develop by the [Core GenRe-Mekong Team](https://github.com/GenRe-Mekong).
 
-[**(&uarr;)**](#amprecon---genre1)  
+[**(&uarr;)**](#amprecon)  
