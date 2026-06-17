@@ -14,7 +14,9 @@ nextflow_workflow {
                 def mnf          = WorkflowUtils.buildMnf(workDir, baseDir)
                 def lanelet      = WorkflowUtils.buildLanelet(workDir, moduleTestDir)
                 def qpcr         = WorkflowUtils.buildFullQpcr(workDir)
+                def k2Species    = WorkflowUtils.buildKrakenSpecies(workDir)
                 params.qpcr      = qpcr
+                
 
                 """
                 input[0] = file("${mnf}")
@@ -23,6 +25,7 @@ nextflow_workflow {
                 input[3] = file("${moduleTestDir}/data/codonKey.txt")
                 input[4] = file("${moduleTestDir}/data/DRLinfo.txt")
                 input[5] = Channel.from(file("${qpcr}"))
+                input[6] = Channel.from(file("${k2Species}"))
 
                 """
             }
@@ -33,13 +36,12 @@ nextflow_workflow {
             assert workflow.success
             assert workflow.out.grc
             assert workflow.out.grc.size() == 1
-            
-            // subet of 160 essential columns including ori grc, qpcr, and phenotyper
-            def grc = workflow.out.grc.get(0)
-            def subsetGrc = WorkflowUtils.subsetColumns(grc, "${workDir}/subsetGrc.tsv", 2, 162)            
 
-            // assert md5
-            assert path(subsetGrc).md5 == 'ee3f2b011c4481bbd872a6163a3f1e36'
+            // subset of essential columns including original GRC, qPCR, phenotyper, and Kraken-derived output
+            def grc = workflow.out.grc.get(0)
+            def subsetGrc = WorkflowUtils.subsetColumns(grc, "${workDir}/subsetGrc.tsv", 2, 163)
+
+            assert path(subsetGrc).md5 == '25dc7f0fdc0848365864af2522033a4c'
             
         }
 
@@ -64,6 +66,7 @@ nextflow_workflow {
                 input[3] = file("${moduleTestDir}/data/codonKey.txt")
                 input[4] = file("${moduleTestDir}/data/DRLinfo.txt")
                 input[5] = Channel.from(file("${qpcr}"))
+                input[6] = Channel.empty()
 
                 """
             }
@@ -95,6 +98,7 @@ nextflow_workflow {
                     input[3] = file("${moduleTestDir}/data/codonKey.txt")
                     input[4] = file("${moduleTestDir}/data/DRLinfo.txt")
                     input[5] = Channel.from(file("${qpcr}"))
+                    input[6] = Channel.empty()
 
                     """
                 }
@@ -134,6 +138,7 @@ nextflow_workflow {
                 input[3] = file("${moduleTestDir}/data/codonKey.txt")
                 input[4] = file("${moduleTestDir}/data/DRLinfo.txt")
                 input[5] = Channel.empty()
+                input[6] = Channel.empty()
 
                 """
             }
@@ -177,6 +182,7 @@ nextflow_workflow {
                 input[3] = file("${moduleTestDir}/data/codonKey.txt")
                 input[4] = file("${moduleTestDir}/data/DRLinfo.txt")
                 input[5] = Channel.empty()
+                input[6] = Channel.empty()
                 """
             }
         }
@@ -207,6 +213,73 @@ nextflow_workflow {
         }
     }
 
+    test('Test: Kraken results are assembled into species-kraken column correctly') {
+        when {
+            params {
+                batch_id      = 'test'
+                phenotyper    = false
+            }
+            workflow {
+
+                def mnf          = WorkflowUtils.buildMnf(workDir, baseDir)
+                def lanelet      = WorkflowUtils.buildLanelet(workDir, moduleTestDir)
+                def k2Species    = WorkflowUtils.buildKrakenSpecies(workDir)
+
+                """
+                input[0] = file("${mnf}")
+                input[1] = file("${lanelet}")
+                input[2] = file("${moduleTestDir}/data/chromKey.txt")
+                input[3] = file("${moduleTestDir}/data/codonKey.txt")
+                input[4] = file("${moduleTestDir}/data/DRLinfo.txt")
+                input[5] = Channel.empty()
+                input[6] = Channel.from(file("${k2Species}"))
+                """
+            }
+        }
+
+        then {
+            assert workflow.success
+            assert workflow.out.grc
+            assert workflow.out.grc.size() == 1
+
+            def grcLines = path(workflow.out.grc.get(0)).readLines()
+            def header = grcLines[0].split('\t', -1)
+            def columns = header.toList()
+            def speciesIdx = columns.indexOf('species-kraken')
+
+            assert speciesIdx >= 0 : "GRC output must contain 'species-kraken' column when Kraken results are provided. Columns: ${columns}"
+
+            def speciesBySample = grcLines.drop(1).collectEntries { line ->
+                def fields = line.split('\t', -1)
+                [(fields[0]): fields[speciesIdx]]
+            }
+
+            ['sample01', 'sample05'].each { sampleId ->
+                assert speciesBySample[sampleId] == 'Pv' : "Expected mocked Kraken call 'Pv' for ${sampleId}, got '${speciesBySample[sampleId]}'"
+            }
+
+            ['sample06', 'sample10'].each { sampleId ->
+                assert speciesBySample[sampleId] == 'Pf' : "Expected mocked Kraken call 'Pf' for ${sampleId}, got '${speciesBySample[sampleId]}'"
+            }
+
+            ['sample11', 'sample15'].each { sampleId ->
+                assert speciesBySample[sampleId] == 'Pf, Pv' : "Expected mocked Kraken call 'Pf, Pv' for ${sampleId}, got '${speciesBySample[sampleId]}'"
+            }
+
+            ['sample16', 'sample20'].each { sampleId ->
+                assert speciesBySample[sampleId] == 'Pm' : "Expected mocked Kraken call 'Pm' for ${sampleId}, got '${speciesBySample[sampleId]}'"
+            }
+
+            ['sample21', 'sample25'].each { sampleId ->
+                assert speciesBySample[sampleId] == 'Pk' : "Expected mocked Kraken call 'Pk' for ${sampleId}, got '${speciesBySample[sampleId]}'"
+            }
+
+            ['sample26', 'sample30'].each { sampleId ->
+                assert speciesBySample[sampleId] == 'Po' : "Expected mocked Kraken call 'Po' for ${sampleId}, got '${speciesBySample[sampleId]}'"
+            }
+        }
+    }
+
     // ===================================================================
     //   Test: Kelch13 disabled switch (no_kelch=true, legacy feature)
     //   When kelch13 analysis is disabled, the workflow should succeed
@@ -231,6 +304,7 @@ nextflow_workflow {
                 input[3] = file("${moduleTestDir}/data/codonKey.txt")
                 input[4] = file("${moduleTestDir}/data/DRLinfo.txt")
                 input[5] = Channel.empty()
+                input[6] = Channel.empty()
                 """
             }
         }

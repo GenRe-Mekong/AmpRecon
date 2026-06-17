@@ -118,5 +118,32 @@ class WorkflowUtils {
             }
         )
     }
+
+    // Build a realistic Kraken postprocess output with the same 30-sample coverage as the other workflow mocks.
+    static String buildKrakenSpecies(String workDir) {
+        def krakenCalls = [
+            [count: 5, species: "Pv",     reads: "999"],
+            [count: 5, species: "Pf",     reads: "1001"],
+            [count: 5, species: "Pf, Pv", reads: "1003"],
+            [count: 5, species: "Pm",     reads: "1005"],
+            [count: 5, species: "Pk",     reads: "1007"],
+            [count: 5, species: "Po",     reads: "1009"],
+        ]
+
+        return makeManifest("${workDir}/species_call.tsv",
+            ["ID", "species-kraken", "k2_total_reads"],
+            krakenCalls.withIndex().collectMany { testCase, idx ->
+                (1..testCase.count).collect { j ->
+                    def sampleNum = idx * 5 + j
+                    def sampleName = String.format("sample%02d", sampleNum)
+                    [
+                        ID               : sampleName,
+                        "species-kraken": testCase.species,
+                        k2_total_reads   : testCase.reads,
+                    ]
+                }
+            }
+        )
+    }
 }
 

@@ -107,11 +107,20 @@ workflow PIPELINE_INIT {
             qpcr_ch = Channel.empty()
         }
 
+        if (params.kraken) {
+            // kraken db is provided, run kraken db init process
+                kraken_db_ch = Channel.value(file(params.kraken_db, checkIfExists: true))
+                // kraken_db_ch = Channel.fromPath(params.kraken_db, checkIfExists: true).first()
+                kraken_db_ch.view { db -> log.info("Using Kraken2 database at ${db}") }
+        } else {
+            kraken_db_ch = Channel.empty()
+        }
 
     emit: 
         manifest = input
         input_ch
         qpcr_ch
+        kraken_db_ch
 }
 
 /*
