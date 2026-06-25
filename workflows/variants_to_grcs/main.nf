@@ -69,6 +69,7 @@ workflow VARIANTS_TO_GRCS {
         codon_key_file
         drl_information_file
         qpcr_ch
+        k2_species
 
     main:
 
@@ -134,6 +135,7 @@ workflow VARIANTS_TO_GRCS {
             .concat(grc_amino_acid_caller.out.grc2)
             .concat(grc_barcoding.out.barcoding_split_out_file)
             .concat(qpcr_ch)
+            .concat(k2_species)
             .collect()
             .set{grc_components}
 

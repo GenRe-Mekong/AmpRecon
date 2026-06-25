@@ -1,5 +1,6 @@
 #!/usr/bin/env nextflow
 // Copyright (C) 2023 Genome Surveillance Unit/Genome Research Ltd.
+// Copyright (C) 2025 GenRe-Mekong Core Team.
 
 // --- import modules ---------------------------------------------------------
 
@@ -9,6 +10,7 @@ include { FASTQ_PREPROCESS    } from './workflows/fastq_preprocess'
 include { FASTQC              } from './modules/fastqc/main'
 include { ALIGNMENT           } from './workflows/alignment'
 include { GENOTYPING          } from './workflows/genotyping'
+include { KRAKEN2             } from './workflows/kraken2'
 include { VARIANTS_TO_GRCS    } from './workflows/variants_to_grcs'
 include { MULTIQC             } from './modules/multiqc/main'
 include { PIPELINE_COMPLETION } from './workflows/utils'
@@ -50,6 +52,20 @@ workflow AMPRECON {
     ch_multiqc_files = ch_multiqc_files.mix(FASTQC.out.zip.collect{it[1]})
 
     //
+    // KRAKEN2 (OPTIONAL)
+    //
+    
+    if (params.kraken) {
+        KRAKEN2(
+            fastq_ch,
+            PIPELINE_INIT.out.kraken_db_ch
+        )
+        k2_species = KRAKEN2.out.k2_species
+    } else {
+        k2_species = Channel.empty()
+    }
+
+    //
     // ALIGNMENT
     //
     ALIGNMENT(
@@ -89,7 +105,8 @@ workflow AMPRECON {
         params.chrom_key_file_path,
         params.codon_key_file_path,
         params.drl_information_file_path,
-        PIPELINE_INIT.out.qpcr_ch
+        PIPELINE_INIT.out.qpcr_ch,
+        k2_species
     )
     ch_versions = ch_versions.mix(VARIANTS_TO_GRCS.out.versions)
 

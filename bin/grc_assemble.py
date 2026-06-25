@@ -46,8 +46,9 @@ for file in args["grcs_in"]:
     merged_data = pd.concat([merged_data, df], axis=1, sort=False)
     
 # Drop two extra columns from kelch13 mutation caller if they exist
+# Drop total_reads count column from kraken species caller if they exist
 # Keep the original GRC format.
-for col in ["who_cov_perc", "missing_validated_muts"]:
+for col in ["who_cov_perc", "missing_validated_muts", "k2_total_reads"]:
     if col in merged_data.columns:
         merged_data.drop(columns=[col], inplace=True, errors="ignore")
 

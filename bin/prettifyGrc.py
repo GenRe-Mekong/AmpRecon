@@ -139,6 +139,7 @@ ORDERED_COLS = [
     "fastq2_path",
     # order 151
     "species-qpcr",
+    "species-kraken"
 ]
 
 # Drug phenotype columns (present in pipeline output, listed here to ensure ordering)
@@ -205,7 +206,7 @@ _assign(["PfCRT:72", "PfCRT:74", "PfCRT:75", "PfCRT:76", "PfCRT:93", "PfCRT:97",
         COLOUR_BLUE)
 
 _assign(["pm23-break", "pm23-qPCR", "mdr1-qPCR",
-         "species-aSeq", "species-qPCR", "species-barcode", "species-qpcr"],
+         "species-aSeq", "species-qPCR", "species-barcode", "species-qpcr", "species-kraken"],
         COLOUR_PURPLE)
 
 # All Pf3D7 barcode SNP columns → red (matched by prefix in apply_header_colours)

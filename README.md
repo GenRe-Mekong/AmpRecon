@@ -2,9 +2,9 @@
 
 This is a forked of the [genomic-surveillance/AmpRecon](https://github.com/genomic-surveillance/AmpRecon/tree/f73fd7c660fad9f0fc5594e0275ae7ba026ef5e8) pipeline, maintained by [Core GenRe-Mekong Team](https://github.com/GenRe-Mekong).
 
-AmpRecon is a bioinformatics analysis pipeline for analyzing amplicon sequencing data from the malaria parasite _Plasmodium falciparum_. The pipeline currently supports amplicon from three panels including GRC1, GRC2, and Spec. It takes paired-end short-reads `fastq` from each panel as input, align them to their respective reference panels, and performs varints calling to identify genetic variations.
+AmpRecon is a bioinformatics analysis pipeline for analyzing amplicon sequencing data from the malaria parasite _Plasmodium falciparum_. The pipeline currently supports amplicon from three panels including GRC1, GRC2, and SPEC.
 
-The primary output is a [Genetic Report Card (GRC)](https://www.malariagen.net/wp-content/uploads/2024/06/GRC_PfUserGuide_June2024.pdf) in CSV format, which summarizes key genetic information for each sample. This including the detection of drug resistance genes (i.e. kelch and plasmepsin), nucleotide and amino acid barcode, and an estimation of complexity of infection (COI).
+The primary output is a [Genetic Report Card (GRC)](https://www.malariagen.net/wp-content/uploads/2024/06/GRC_PfUserGuide_June2024.pdf) in CSV format, which summarizes key genetic information for each sample.
 
 By default, AmpRecon is configured to process data from _P. falciparum_. However, it can also be used to analyze _Plasmodium vivax_ data by using the provided [configuration file](#p-vivax-configuration-file).
 
@@ -32,6 +32,8 @@ By default, AmpRecon is configured to process data from _P. falciparum_. However
       - [Panel and GRC resources](#panel-and-grc-resources)
       - [Genotyping setting](#genotyping-setting)
       - [McCOIL setting](#mccoil-setting)
+      - [Kraken2 Species Identification setting](#kraken2-species-identification-setting)
+        - [Minimal Pre-Built Kraken2 Database](#minimal-pre-built-kraken2-database)
   - [_P. vivax_ Configuration File](#p-vivax-configuration-file)
   - [Output](#output)
   - [FAQ](#faq)
@@ -39,7 +41,7 @@ By default, AmpRecon is configured to process data from _P. falciparum_. However
 
 ## Quick-Start Guide
 
-AmpRecon is built and tested with Nextflow [version 22.04](https://github.com/nextflow-io/nextflow/releases/tag/v22.04.4). It is recommended to use with either [Docker](https://docs.docker.com/engine/install/ubuntu/#installation-methods) or [Singularity](https://github.com/sylabs/singularity). Assuming you already have [Nextflow](https://github.com/nextflow-io/nextflow), and [Singularity](https://github.com/sylabs/singularity) or [Docker](https://docs.docker.com/engine/install/ubuntu/#installation-methods) installed, you can get started by following these steps:
+AmpRecon is built and tested with Nextflow [version 22.04](https://github.com/nextflow-io/nextflow/releases/tag/v22.04.4). It is recommended to use with either [Docker](https://docs.docker.com/engine/install/ubuntu/#installation-methods) or [Singularity](https://docs.sylabs.io/guides/3.5/user-guide/quick_start.html#quick-installation-steps).
 
 1. Clone the repository:
 
@@ -88,7 +90,6 @@ AmpRecon is built and tested with Nextflow [version 22.04](https://github.com/ne
     --manifest samplesheet.tsv 
    ```
 
-
 ## Installation
 
 ### Prerequisites
@@ -96,25 +97,28 @@ AmpRecon is built and tested with Nextflow [version 22.04](https://github.com/ne
 Before you begin, ensure you have the following installed on a Linux-based operating system:
 
 - [Nextflow](https://www.nextflow.io/docs/latest/install.html#self-install) (≥22.10.21, <26.04).
-- A container engine — either [Docker](https://docs.docker.com/engine/install/ubuntu/#installation-methods) or [Singularity](https://docs.sylabs.io/guides/3.5/user-guide/quick_start.html#quick-installation-steps) is highly recommended, as it simplifies management of software dependencies.
+- A container engine — either [Docker](https://docs.docker.com/engine/install/ubuntu/#installation-methods) or [Singularity](https://docs.sylabs.io/guides/3.5/user-guide/quick_start.html#quick-installation-steps).
 
 > [!NOTE]
-> This versions aim to improves **portability** by relying on publicly available images from the [BioContainers](https://biocontainers.pro/) repository. The pipeline now also supports both **Docker** and **Singularity (Apptainer)** profiles for flexible execution in local and HPC environments.
+> Container images are pulled from [public repositories](https://quay.io). Please see the `conf/containers.config` for the full list of images link used by the pipeline. The pipeline supports both **Docker** and **Singularity**.
 
 1. Install [Nextflow](https://www.nextflow.io/docs/latest/install.html#self-install):
 
    Install the latest version of Nextflow by running:
 
    ```bash
+   # select compatible version (>=22.10.21, <26.04)
+   export NXF_VER=24.10.5   
+
    curl -s https://get.nextflow.io | bash
-   # This will install the latest version
+
    # Move the nextflow executable to a directory in your $PATH
    # e.g., sudo mv nextflow /usr/local/bin/
    ```
 
 2. Install a Container Engine:
 
-   - [Docker](https://docs.docker.com/engine/install/ubuntu/#installation-methods) is a popular choice for local machines and cloud environments. To run using the `Docker`, use the `-profile docker` flag.
+   - [Docker](https://docs.docker.com/engine/install/ubuntu/#installation-methods) is a popular choice for local machines and cloud environments. To run using the `Docker`, use the `-profile docker` flag:
 
    ```bash
    nextflow run main.nf \
@@ -123,7 +127,7 @@ Before you begin, ensure you have the following installed on a Linux-based opera
      --manifest samplesheet.tsv
    ```
 
-   - [Singularity](https://docs.sylabs.io/guides/3.5/user-guide/quick_start.html#quick-installation-steps) is used in most HPC environments. To run using the `Singularity`, use the `-profile singularity` flag. See also: [Running on Computing Cluster](#running-on-computing-cluster)).
+   - [Singularity](https://docs.sylabs.io/guides/3.5/user-guide/quick_start.html#quick-installation-steps) is used in most HPC environments. To run using the `Singularity`, use the `-profile singularity` flag:
 
    ```bash
    nextflow run main.nf \
@@ -141,11 +145,11 @@ Before you begin, ensure you have the following installed on a Linux-based opera
    ```
 
 >[!IMPORTANT]
->If no container engine is available (or deliberately not to use any), you can run the pipeline using `-profile run_locally`. Please note that every programs of an appropiate version needed to be callable on your local computer using the same command in what define in containers (e.g. `python` as `python` not `python3`, `samtools coverage`). The versions tested for compatibility are listed below.
+>If no container engine is available (or deliberately not to use any), you can run the pipeline using `-profile run_locally`. Please note that every programs of an appropiate version needed to be installed on your system.
 
 ### Software Dependencies
 
-AmpRecon pipeline has been extensively tested and is designed to run within a containerized environment (e.g., `Docker` or `Singularity`). The container environment provides the portability of the exact same software environment, regardless of the underlying hardware it runs on, which, in turn, should ensures the reproducibility of the pipeline.
+AmpRecon pipeline has been extensively tested and is designed to run within a containerized environment (e.g., `Docker` or `Singularity`). The container environment provides the portability of the pipeline.
 
 The following table lists the key software versions included in the tested container image:
 
@@ -162,6 +166,7 @@ The following table lists the key software versions included in the tested conta
 | PyVCF             | 0.6.8   |
 | PySam             | 0.23.3  |
 | R Base            | 4.3.1   |
+| Kraken2           | 2.17.1  |
 
 ⚠️If you must run the pipeline using **locally installed softwares** instead of the container, please ensure that your local versions exactly match those listed in the table above.
 
@@ -169,7 +174,7 @@ The following table lists the key software versions included in the tested conta
 
 ### Reference Panel
 
-Before creating the input manifest, it's worth understanding the reference panels used by the pipeline. The pipeline is designed to analyze amplicon sequences from three specific panels. Therefore, each sample should include three corresponding fastq files, one for each panel.
+Before creating the input manifest, it's worth understanding the reference panels used by the pipeline. The pipeline is designed to analyze amplicon sequences from three specific panels. Therefore, the reference panel files must be set up correctly.
 
 By default, the pipeline points to a valid `panels_settings.csv` file containing key information for each panel, including:
 
@@ -186,7 +191,7 @@ If you need to overiding the reference panel, you can provide a custom  `panels_
 | PFA_Spec | /path/to/PFA_Spec.fasta | /path/to/PFA_Spec.regions.txt | /path/to/PFA_Spec.annotation.vcf |
 
 >[!IMPORTANT]
-The `panel_name` column values must **exactly match** the corresponding `primer_panel` entries in the [input manifest](#input-manifest) file to ensures proper alignment between panel configurations and sample data. The default `panel_settings.csv` file defines three standard panel names:
+The `panel_name` column values must **exactly match** the corresponding `primer_panel` entries in the [input manifest](#input-manifest) file to ensures proper alignment between panel configurations and sequencing data.
 >
 > - `PFA_GRC1_v1.0` for `GRC1`
 > - `PFA_GRC2_v1.0` for `GRC2`
@@ -194,7 +199,7 @@ The `panel_name` column values must **exactly match** the corresponding `primer_
 
 ### Input Manifest
 
-AmpRecon accepts input through a manifest file, which is a tab-separated text file that specifying the paths to the fastq files for each sample and panel. By default, AmpRecon expects fastq files. However, you can also provide CRAM or BAM files using `--execution_mode cram` on the command line.
+AmpRecon accepts input through a manifest file, which is a tab-separated text file that specifying the paths to the fastq files for each sample and panel. By default, AmpRecon expects fastq files as input.
 
 The required structure of the manifest file depends on the selected execution mode. Each mode has a distinct format that must be followed exactly.
 
@@ -237,11 +242,11 @@ nextflow run main.nf \
 ```  
 
 >[!NOTE]
->**_Relative paths_** (i.e., `path/to/file.fastq`) are interpreted from the directory where you execute the pipeline. To ensure the pipeline can always find your files, regardless of where you run it from, please use the **_absolute path_** (i.e., `/home/user/path/to/file.fastq`).
+>**_Relative paths_** (i.e., `path/to/file.fastq`) are interpreted from the directory where you execute the pipeline. To ensure the pipeline can always find your files, regardless of where you run the pipeline, it is recommended to use **absolute paths** (i.e., `/home/user/path/to/file.fastq`).
 
 #### Metadata
 
-To include additional metadata in the pipeline results (e.g., Collection Site, Collection Date, etc.), you can supplies the metadata file with any extra column via the `--metadata` with the headers of your choice. Ensure that the custom headers do not conflict with the required headers or [reserved result headers](https://www.malariagen.net/wp-content/uploads/2023/10/GRC_UserGuide_July2023.pdf).
+To include additional metadata in the pipeline results (e.g., Collection Site, Collection Date, etc.), you can supply a metadata file with any additional columns via `--metadata`. Ensure that custom column headers do not conflict with the required headers or [reserved result headers](https://www.malariagen.net/wp-content/uploads/2024/06/GRC_PfUserGuide_June2024.pdf).
 
 The file is to be in the tab-delimited format with same sample identifier in the column `sample_id` as the input manifest file.
 
@@ -253,7 +258,7 @@ The file is to be in the tab-delimited format with same sample identifier in the
 |sample02   |    A02       |    TH   |   SiteA  |   2025-01-15   |
 |sample03   |    A03       |   TH    |   SiteA  |   2025-03-11   |
 
-[**(&uarr;)**](#amprecon)
+[**(↑)**](#amprecon)
 
 ## Running on Computing Cluster
 
@@ -261,7 +266,7 @@ HPC/compute cluster may have different execution environment. To ensure successf
 
 ### Containers Caching
 
-When running using the `-profile singularity`, Nextflow will automatically download the required container image at **runtime** and cache it in the `containers` directory. However, this can cause issues on a cluster in the first run, due to often lack of internet access on compute node.
+When running using the `-profile singularity`, Nextflow will automatically download the required container image at **runtime** and cache it in the `containers` directory. However, this can cause issues on HPC systems where compute nodes do not have internet access.
 
 The pipeline provide the `containers/pull_containers.sh` bash script to download all the images beforehand to the `containers` directory to prevent any downloads at runtime.
 
@@ -274,7 +279,7 @@ cd containers
 
 ### Specific Cluster Configuration
 
-To run of computing cluster, `Nextflow` must be explicitly told which executor to use for submitting tasks (e.g., `slurm`, `sge`). Otherwise, all the jobs will be run locally where the pipeline is executed. This can be achieved by setting an executor in the profiles configuration. It is recommend to add an additional `profile` in `conf/profiles.config` to avoid altering any standard profile behavior. For more available options on executer and process, see the [Nextflow documentation](https://www.nextflow.io/docs/latest/config.html#config-profiles).
+When running on the computing cluster, `Nextflow` must be explicitly told which **executor** to use for submitting tasks (e.g., `slurm`, `sge`). Otherwise, all the jobs will be run locally where the pipeline is launched.
 
 The following is an example profile for running on the BMRC Cluster:
 
@@ -310,11 +315,14 @@ nextflow run main.nf \
   --manifest /path/to/samplesheet.tsv
 ```  
 
-[**(&uarr;)**](#amprecon)  
+>[!NOTE]
+> It is recommend to add an additional `profile` in `conf/profiles.config` to avoid altering any pipeline default profile behavior. Please consult with [Nextflow documentation](https://www.nextflow.io/docs/latest/config.html#config-profiles) for the full list of configurable parameters.
+
+[**(↑)**](#amprecon)  
 
 ## Pipeline Configuration
 
-AmpRecon allows for workflow customization through various parameters. These parameters can be set on the command line in addition to the required parameters (e.g., `--batch_id` and `--manifest`). The following is a list of available configurable parameters.
+AmpRecon allows for workflow customization through various parameters. These parameters can be set on the command line in addition to the required parameters (e.g., `--batch_id` and `--manifest`).
 
 ### Configable Parameters
 
@@ -332,7 +340,7 @@ AmpRecon allows for workflow customization through various parameters. These par
 
 #### Panel and GRC resources
 
-- `--panel_setting`: Path to a CSV file that sets the reference (`fasta`), target sites for variant calling (`vcf`), and regions (`csv`) for each panel. See [Reference Panel](#reference-panel). (Default: `${projectDir}/ampreconresources/plasmodium/falciparum/general/panel_settings_pseudoreference.csv`).
+- `--panel_setting`: Path to a CSV file that sets the reference (`fasta`), target sites for variant calling (`vcf`), and regions (`csv`) for each panel. See [Reference Panel](#reference-panel). (Default: `$projectDir/ampreconresources/plasmodium/falciparum/general/panel_settings_pseudoreference.csv`).
 
 - `--grc_settings_file_path`: Path to the GRC settings file. (Default: `$projectDir/ampreconresources/plasmodium/falciparum/grc_resources/grc_settings.json`).
 
@@ -365,7 +373,40 @@ AmpRecon allows for workflow customization through various parameters. These par
 - `--mccoil_e2`: The probability of calling heterozygous loci homozygous. (Default: `0.05`)
 - `--mccoil_m0`: Initial COI. (Default: `5`)
 
-[**(&uarr;)**](#amprecon)
+#### Kraken2 Species Identification setting
+
+AmpRecon includes an optional [Kraken2](https://github.com/DerrickWood/kraken2)-based species identification step. When enabled, the pipeline classifies reads from the `PFA_Spec` panel against a minimal pre-built Kraken2 database of _Plasmodium_ mitochondrial sequences, and appends a `species-kraken` column to the GRC output.
+
+- `--kraken`: Enable Kraken2 species identification. (Default: `false`)
+- `--kraken_db`: Path to the Kraken2 database directory. (Default: `$projectDir/assets/default_db`)
+
+To enable it, add `--kraken` to the command line:
+
+```bash
+nextflow run main.nf \
+  -profile docker \
+  --batch_id RUN00001 \
+  --manifest samplesheet.tsv \
+  --kraken
+```
+
+##### Minimal Pre-Built Kraken2 Database
+
+The default database (`assets/default_db`) is a minimal Kraken2 database built from the mitochondrial sequences of six _Plasmodium_ species. The `MITO_SPEC` sequences used to construct this database are listed below.
+
+| Species | Taxon ID | Reference Sequence | Source |
+|---------|----------|--------------------|--------|
+| _P. falciparum_ | 5833 | `Pf3D7_MIT_v3` | [PlasmoDB](https://plasmodb.org/plasmo/app/record/genomic-sequence/download/Pf3D7_MIT_v3) |
+| _P. vivax_ | 5855 | `PVAD80_MIT` | [PlasmoDB – PvivaxSal1 FASTA downloads](https://plasmodb.org/plasmo/app/downloads/Current_Release/PvivaxSal1/fasta/data/) |
+| _P. knowlesi_ | 5850 | `PKNH_MIT_v2` | [PlasmoDB](https://plasmodb.org/plasmo/app/record/genomic-sequence/download/PKNH_MIT_v2) |
+| _P. malariae_ | 5858 | `LT594637` | [NCBI Nucleotide](https://www.ncbi.nlm.nih.gov/nuccore/LT594637) |
+| _P. ovale curtisi_ | 864141 | `HQ712052.1` | [NCBI Nucleotide](https://www.ncbi.nlm.nih.gov/nuccore/HQ712052.1?report=fasta) |
+| _P. ovale wallikeri_ | 864142 | `HQ712053` | [NCBI Nucleotide](https://www.ncbi.nlm.nih.gov/nuccore/HQ712053) |
+
+> [!NOTE]
+> The database encodes two sequence slots per taxon (`MITOSPEC1` and `MITOSPEC2`) to support paired-end classification. Species calls are reported using short codes: `Pf`, `Pv`, `Pk`, `Pm`, `Po`.
+
+[**(↑)**](#amprecon)
 
 ## _P. vivax_ Configuration File  
 
@@ -381,11 +422,11 @@ nextflow run main.nf \
   --manifest pv_samplesheet.tsv
 ```
 
-[**(&uarr;)**](#amprecon)  
+[**(↑)**](#amprecon)  
 
 ## Output
 
-After each run, AmpRecon produces the following directory structure:
+AmpRecon running with `--batch_id RUN000001` will produces the following directory structure:
 
 ```bash
 RUN00001_20250101_000101/
@@ -402,6 +443,9 @@ RUN00001_20250101_000101/
 │   │   └── k13_mut_call_long.tsv
 │   ├── RUN00001_GRC.txt
 │   └── RUN00001_GRC.xlsx
+├── kraken2/
+│   ├── sample01_PFA_Spec_output.txt
+│   └── sample01_PFA_Spec_report.txt
 ├── multiqc
 │   ├── RUN000001_multiqc_report_data/
 │   └── RUN000001_multiqc_report.html
@@ -431,7 +475,10 @@ Contains filtered and indexed VCF files produced after genotyping.
 Each VCF represents the variant calls for a specific sample–panel pair.
 
 - `grc/`
-Contains the GRC summary file (e.g., RUN00001_GRC.txt), reporting aggregated per-panel results such as read counts and coverage statistics. Additionally, it also contains the detail report on the kelch mutation step under the `logs/` directory.
+Contains the GRC summary file (e.g., RUN00001_GRC.txt), reporting aggregated per-panel results such as read counts and coverage statistics. Additionally, it also contains the detail report on the kelch13 mutation calling.
+
+- `kraken2/` _(only present when `--kraken` is enabled)_
+Contains per-sample Kraken2 classification output and report files for the `PFA_Spec` panel reads.
 
 - `read_counts/`
 Contains per-panel read counts by region. Each CSV file (`*_reads_per_region.csv`) provides statistics such as total reads and mapping quality for each panel region.
@@ -440,25 +487,24 @@ Contains per-panel read counts by region. Each CSV file (`*_reads_per_region.csv
 Contains the consolidated MultiQC report (multiqc_report.html) summarizing quality metrics of sequence, mapping, and variant calling across all samples and panels.
 
 - `pipeline_info/`
-Includes Nextflow’s execution metadata such as reports, timelines, and the pipeline DAG, useful for reproducibility and debugging.
+Includes Nextflow's execution metadata such as reports, timelines, and the pipeline DAG, useful for reproducibility and debugging.
 
-[**(&uarr;)**](#amprecon)  
+[**(↑)**](#amprecon)  
 
-## FAQ 
+## FAQ
 
 **Pipeline always failed at `GRC_RUN_MCCOIL` step:**
 
-This error typically occurs when the input data lacks sufficient heterozygous data for the **Complexity of Infection (COI)** analysis. The `GRC_RUN_MCCOIL` process requires a minimum threshold of heterozygous sites to calculate COI accurately. If your dataset is small (e.g., during testing), the remaining heterozygous sites may be removed during the filtering step, causing the analysis to fail and the pipeline to stop.
+This error typically occurs when the input data lacks sufficient heterozygous data for the **Complexity of Infection (COI)** analysis. The `GRC_RUN_MCCOIL` process requires a minimum threshold of heterozygous sites across samples to run.
 
 If you are working with a limited dataset or COI is not required for your analysis, use the `--no_coi` flag to bypass this step.
 
-
-[**(&uarr;)**](#amprecon)  
+[**(↑)**](#amprecon)  
 
 ## Authors and Acknowledgements
 
-This pipeline was originally developed and maintained by the [Data Analysis and Engineering Team](https://www.sanger.ac.uk/group/data-analysis-and-engineering/) at the Wellcome Sanger Institute’s [Genomic Surveillance Unit](https://www.sanger.ac.uk/collaboration/genomic-surveillance-unit/).  The methodology implemented by early versions of the pipeline is described in [Jacob et al. (2021)](https://doi.org/10.7554/eLife.62997).
+This pipeline was originally developed and maintained by the [Data Analysis and Engineering Team](https://www.sanger.ac.uk/group/data-analysis-and-engineering/) at the Wellcome Sanger Institute [Genomic Surveillance Unit](https://www.sanger.ac.uk/collaboration/genomic-surveillance-unit/). The methodology implemented by early versions of the pipeline is described in [Jacob et al. (2021)](https://doi.org/10.7554/eLife.62997).
 
 Following the closure of GSU, the project has been transferred to and is now maintained and further develop by the [Core GenRe-Mekong Team](https://github.com/GenRe-Mekong).
 
-[**(&uarr;)**](#amprecon)  
+[**(↑)**](#amprecon)
