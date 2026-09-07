@@ -2,134 +2,72 @@
 // Copyright (C) 2023 Genome Surveillance Unit/Genome Research Ltd.
 // Copyright (C) 2025 GenRe-Mekong Core Team.
 
+/*
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    genre-mekong/amprecon
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Github : https://github.com/GenRe-Mekong/AmpRecon
+----------------------------------------------------------------------------------------
+*/
+
 // --- import modules ---------------------------------------------------------
 
-include { PIPELINE_INIT       } from './workflows/utils'
-include { CRAM_TO_READS       } from './workflows/cram_to_reads'
-include { FASTQ_PREPROCESS    } from './workflows/fastq_preprocess'
-include { FASTQC              } from './modules/fastqc/main'
-include { ALIGNMENT           } from './workflows/alignment'
-include { GENOTYPING          } from './workflows/genotyping'
-include { KRAKEN2             } from './workflows/kraken2'
-include { VARIANTS_TO_GRCS    } from './workflows/variants_to_grcs'
-include { MULTIQC             } from './modules/multiqc/main'
-include { PIPELINE_COMPLETION } from './workflows/utils'
-include { resolvePath         } from './workflows/utils'
-include { write_vcfs_manifest } from './modules/write_vcfs_manifest.nf'
+include { PIPELINE_INIT       } from './subworkflows/utils'
+include { AMPRECON            } from './workflows/amprecon'
 
 // Main entry-point workflow
-workflow AMPRECON {
+workflow GENREMEKONG_AMPRECON {
 
-    // -- MAIN-EXECUTION ------------------------------------------------------
-    ch_versions = Channel.empty()
-    ch_multiqc_files = Channel.empty()
+    take:
+
+    manifest
+    input_ch // fastq/cram channel
+    kraken_db_ch
+    qpcr_ch
+
+    main: 
+
+    AMPRECON(
+        params.execution_mode,
+        manifest,
+        input_ch,
+        params.kraken,
+        kraken_db_ch,
+		params.chrom_key_file_path,
+        params.codon_key_file_path,
+        params.drl_information_file_path,
+        qpcr_ch,
+		params.multiqc_config,
+		params.multiqc_logo,
+		params.results_dir
+    )
+
+   emit:
+    grc = AMPRECON.out.grc
+    mqc = AMPRECON.out.mqc
+
+}
+
+// --- Execute Main Workflow -------------------------------------------------
+workflow {
+
+    main:
 
     PIPELINE_INIT (
-        params.help,
+		params.help,
         params.monochrome_logs,
         params.results_dir,
         params.manifest,
         params.qpcr
     )
 
-    if (params.execution_mode == "cram") {
-        CRAM_TO_READS(
-            PIPELINE_INIT.out.input_ch
-        )
-        fastq_ch = CRAM_TO_READS.out.fastq
-        ch_versions = ch_versions.mix(CRAM_TO_READS.out.versions)
-    } else {
-        FASTQ_PREPROCESS(PIPELINE_INIT.out.input_ch)
-        fastq_ch = FASTQ_PREPROCESS.out.fastq
-        ch_versions = ch_versions.mix(FASTQ_PREPROCESS.out.versions)
-    }
 
-    //
-    // QUALITY CHECK
-    //
-    FASTQC(fastq_ch)
-    ch_versions = ch_versions.mix(FASTQC.out.versions.first())
-    ch_multiqc_files = ch_multiqc_files.mix(FASTQC.out.zip.collect{it[1]})
-
-    //
-    // KRAKEN2 (OPTIONAL)
-    //
-    
-    if (params.kraken) {
-        KRAKEN2(
-            fastq_ch,
-            PIPELINE_INIT.out.kraken_db_ch
-        )
-        k2_species = KRAKEN2.out.k2_species
-    } else {
-        k2_species = Channel.empty()
-    }
-
-    //
-    // ALIGNMENT
-    //
-    ALIGNMENT(
-        fastq_ch
-    )
-    ch_versions = ch_versions.mix(ALIGNMENT.out.versions)
-    ch_multiqc_files = ch_multiqc_files.mix(ALIGNMENT.out.mqc)
-
-    //
-    // GENOTYPING
-    //
-    GENOTYPING(
-        ALIGNMENT.out.bam
-    )
-    ch_versions = ch_versions.mix(GENOTYPING.out.versions)
-    ch_multiqc_files = ch_multiqc_files.mix(GENOTYPING.out.mqc)
-
-    //
-    // GRC CREATION
-    //
-    GENOTYPING.out.vcf
-        | map { it ->
-            def (meta, vcf, tbi) = it[0..2]
-            tuple( meta.id ,vcf ) }
-        | multiMap { it ->
-            id:  it[0]
-            vcf: it[1]
-        }
-        | set { vcf_ch }
-
-    write_vcfs_manifest(vcf_ch.id.collect(), vcf_ch.vcf.collect())
-    lanelet_manifest_file = write_vcfs_manifest.out
-
-    VARIANTS_TO_GRCS(
+    GENREMEKONG_AMPRECON (
         PIPELINE_INIT.out.manifest,
-        lanelet_manifest_file,
-        params.chrom_key_file_path,
-        params.codon_key_file_path,
-        params.drl_information_file_path,
-        PIPELINE_INIT.out.qpcr_ch,
-        k2_species
+        PIPELINE_INIT.out.input_ch,
+        PIPELINE_INIT.out.kraken_db_ch,
+        PIPELINE_INIT.out.qpcr_ch
     )
-    ch_versions = ch_versions.mix(VARIANTS_TO_GRCS.out.versions)
-
-    MULTIQC(
-        ch_multiqc_files.collect(),
-        params.multiqc_config,
-        [],
-        params.multiqc_logo,
-        [],
-        [],
-        ch_versions.collect()
-    )
-    // TODO:
-    PIPELINE_COMPLETION()
-
-    emit:
-    grc = VARIANTS_TO_GRCS.out.grc
-
-}
-
-// --- Execute Main Workflow -------------------------------------------------
-workflow {
-    AMPRECON()
 }
 
 // --- On Completion ---------------------------------------------------------
