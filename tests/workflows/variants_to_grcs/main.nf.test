@@ -1,7 +1,7 @@
 nextflow_workflow {
 
     name 'Test VARIANTS_TO_GRCS Subworkflow'
-    script 'workflows/variants_to_grcs/main.nf'
+    script 'subworkflows/variants_to_grcs/main.nf'
     workflow 'VARIANTS_TO_GRCS'
 
     test('Test: GRC Assemble Step - Full, all switches enabled, assert with expected result.') {
