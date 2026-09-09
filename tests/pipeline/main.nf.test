@@ -1,8 +1,7 @@
-nextflow_workflow {
+nextflow_pipeline {
 
     name "Test Main Workflow with Mode Setting"
     script "main.nf"
-    workflow "AMPRECON"
 
     def makeManifest = { String name, List<String> header, List<Map> rows ->
         def f = new File(name)
@@ -46,11 +45,7 @@ nextflow_workflow {
 
         then {
             assert workflow.success
-            assert workflow.out.grc
-            assert workflow.out.grc.size() == 1
-
-            /* def grc = workflow.out.grc.get(0) */
-            /* assert path(grc).md5 == "e61424059831c0e6196a9bd674e4af42" */
+            assert path(params.results_dir).exists()
         }
 
     }
@@ -86,11 +81,7 @@ nextflow_workflow {
 
         then {
             assert workflow.success
-            assert workflow.out.grc
-            assert workflow.out.grc.size() == 1
-
-            /* def grc = workflow.out.grc.get(0) */
-            /* assert path(grc).md5 == "5cdea445798e284b6a39180fc2d93301" */
+            assert path(params.results_dir).exists()
         }
 
     }

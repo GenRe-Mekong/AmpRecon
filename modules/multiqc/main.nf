@@ -4,12 +4,12 @@ process MULTIQC {
 
     input:
     path  multiqc_files, stageAs: "?/*"
-    path(multiqc_config)
-    path(extra_multiqc_config)
-    path(multiqc_logo)
-    path(replace_names)
-    path(sample_names)
-    path versions, stageAs: "?/*"
+    path  multiqc_config, stageAs: "?/*"
+    path  extra_multiqc_config //
+    path  multiqc_logo
+    path  replace_names
+    path  sample_names
+    path  versions, stageAs: "?/*"
 
     output:
     path "*multiqc_report.html", emit: report
