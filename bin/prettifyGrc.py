@@ -27,9 +27,12 @@ import pandas as pd
 
 RENAME_MAP = {
     "ID":           "SampleId",
+    "mdr1-qpcr":    "mdr1-qPCR",
+    "pm23-qpcr":    "pm23-qPCR",
+    "species-kraken":  "species-aSeq",
+    "species-qpcr":  "species-qPCR",
+    "species-barcode": "species-barcode",
     "kelch13":      "Pfkelch13",
-    "pm23-qpcr":    "pm23-Amp",
-    "mdr1-qpcr":    "mdr1-Amp",
     "PGB:326":      "PfCRT:326",
     "PGB:356":      "PfCRT:356",
     "PGB:127":      "PfARPS10:127",
@@ -96,6 +99,12 @@ ORDERED_COLS = [
     "PfMDR1:86", "PfMDR1:184", "PfMDR1:1034", "PfMDR1:1042", "PfMDR1:1226", "PfMDR1:1246",
     # Renamed PGB positions
     "PfARPS10:127", "PfARPS10:128", "PfFD:193", "PfMDR2:484",
+    # pm23 results
+    "pm23-break", "pm23-qPCR", 
+    # mdr1 results
+    "mdr1-qPCR", 
+    # species results
+    "species-aSeq", "species-qPCR", "species-barcode",
     # Barcode SNP columns 48-148
     "Pf3D7_02_v3:376222", "Pf3D7_02_v3:470013", "Pf3D7_03_v3:656861",
     "Pf3D7_04_v3:110442", "Pf3D7_04_v3:881571", "Pf3D7_05_v3:350933",
@@ -138,8 +147,8 @@ ORDERED_COLS = [
     "fastq1_path",
     "fastq2_path",
     # order 151
-    "species-qpcr",
-    "species-kraken"
+    # "species-qpcr",
+    # "species-kraken"
 ]
 
 # Drug phenotype columns (present in pipeline output, listed here to ensure ordering)
@@ -206,11 +215,51 @@ _assign(["PfCRT:72", "PfCRT:74", "PfCRT:75", "PfCRT:76", "PfCRT:93", "PfCRT:97",
         COLOUR_BLUE)
 
 _assign(["pm23-break", "pm23-qPCR", "mdr1-qPCR",
-         "species-aSeq", "species-qPCR", "species-barcode", "species-qpcr", "species-kraken"],
+         "species-aSeq", "species-qPCR", "species-barcode"],
         COLOUR_PURPLE)
 
 # All Pf3D7 barcode SNP columns → red (matched by prefix in apply_header_colours)
 
+# def conclude_pm23(break_series: pd.Series, qpcr_series: pd.Series) -> pd.Series:
+def conclude_pm23(qpcr_series: pd.Series) -> pd.Series:
+    """Conclude pm23 status based on qPCR results only."""
+    """Copy the values to conclude series."""
+    return qpcr_series.copy()
+
+def conclude_mdr1(qpcr_series: pd.Series) -> pd.Series:
+    """Conclude mdr1 status based on qPCR results only."""
+    """Copy the values to conclude series."""
+    return qpcr_series.copy()
+
+def conclude_species(aseq_series: pd.Series, qpcr_series: pd.Series, barcode_series: pd.Series) -> pd.Series:
+    """Conclude species status based on aSeq, qPCR, and barcode results."""
+    """Trust barcode for pf, otherwise use aSeq, then qPCR."""
+    """If pv is detected in aSeq or qPCR, add up that information with comma seperation in string style."""
+    def conclude_row(aseq_val, qpcr_val, barcode_val):
+        result = set()
+        if isinstance(barcode_val, str):
+            barcode_set = set(barcode_val.split(","))
+            result |= barcode_set
+        if isinstance(aseq_val, str) and aseq_val != "-":
+            aseq_val = set(aseq_val.split(","))
+            result |= aseq_val
+        if isinstance(qpcr_val, str) and qpcr_val != "-":
+            result |= set(qpcr_val.split(","))
+        if result:
+            return ",".join(sorted(result))
+        return pd.NA
+    return pd.Series(
+        [conclude_row(aseq, qpcr, barcode) for aseq, qpcr, barcode in zip(aseq_series, qpcr_series, barcode_series)],
+        index=aseq_series.index
+    )
+
+def get_species_barcode(barcode_missing_series: pd.Series) -> pd.Series:
+    """Extract species barcode from GenBarcode missing."""
+    def is_pf(val):
+        if pd.isna(val) or val > 0.98:
+            return pd.NA
+        return "Pf"
+    return barcode_missing_series.apply(is_pf)
 
 def calc_barcode_missing(barcode_series: pd.Series) -> pd.Series:
     """Ratio of 'X' characters in GenBarcode string."""
@@ -350,6 +399,14 @@ def convert(tsv_path: str, xlsx_path: str, run_id: str = "",
         df["GenBarcodeMissing"] = pd.NA
         df["GenBarcodeHet"] = pd.NA
         print("  Warning: 'GenBarcode' column not found; GenBarcodeMissing/Het set to NA.")
+
+    # 3. Make a conclusion of pm23, mdr1, and species 
+    if "pm23-qpcr" in df.columns:
+        df["pm23-Amp"] = df["pm23-qPCR"].apply(conclude_pm23)
+    if "mdr1-qpcr" in df.columns:
+        df["mdr1-Amp"] = df["mdr1-qPCR"].apply(conclude_mdr1)
+    df["species-barcode"] = get_species_barcode(df["GenBarcodeMissing"])
+    df["Species"] = conclude_species(df["species-aSeq"],df['species-qPCR'],df['species-barcode'])
 
     # 4. COI / McCOIL fallback
     if "COI" not in df.columns:
